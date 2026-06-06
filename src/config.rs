@@ -35,6 +35,45 @@ impl From<toml_edit::TomlError> for Error {
 }
 
 // ---------------------------------------------------------------------------
+// NumberRepr
+
+/// Controls whether whole-number values are written as TOML integers or floats.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NumberRepr {
+    WholeAsInteger,
+    AlwaysFloat,
+}
+
+impl NumberRepr {
+    /// Integer `step` → integer literals; fractional `step` → float literals.
+    pub fn from_step(step: f64) -> Self {
+        if step.fract() == 0.0 {
+            NumberRepr::WholeAsInteger
+        } else {
+            NumberRepr::AlwaysFloat
+        }
+    }
+
+    /// No `.` in any option string → integer literals; otherwise floats.
+    pub fn from_options(options: &[String]) -> Self {
+        if options.iter().all(|o| !o.contains('.')) {
+            NumberRepr::WholeAsInteger
+        } else {
+            NumberRepr::AlwaysFloat
+        }
+    }
+}
+
+fn number_item(value: f64, repr: NumberRepr) -> Item {
+    match repr {
+        NumberRepr::WholeAsInteger if value.fract() == 0.0 && value.is_finite() => {
+            toml_edit::value(value as i64)
+        }
+        _ => toml_edit::value(value),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ConfigStore
 
 pub struct ConfigStore {
@@ -164,9 +203,10 @@ impl ConfigStore {
         self.set_item(path, toml_edit::value(value))
     }
 
-    /// Set a float value by dot-separated path, creating intermediate tables as needed.
-    pub fn set_number(&mut self, path: &str, value: f64) -> bool {
-        self.set_item(path, toml_edit::value(value))
+    /// Set a numeric value by dot-separated path, creating intermediate tables as needed.
+    /// Writes a float literal unless `repr` requests integers for whole values.
+    pub fn set_number(&mut self, path: &str, value: f64, repr: NumberRepr) -> bool {
+        self.set_item(path, number_item(value, repr))
     }
 
     /// Insert an empty table at `path`, creating intermediate tables as needed.

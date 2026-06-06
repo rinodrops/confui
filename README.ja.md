@@ -133,6 +133,14 @@ make clean
 
 **https://emotiongraphics.jp/docs/confui/**
 
+### `segmented_control` と `type`
+
+`segmented_control` は既定で文字列（`type` 省略または `type = "string"`）を読み書きします。
+`type = "number"` にすると TOML の数値として保存します。`options` はセグメントのラベル兼
+保存値となる数値の文字列表現です。すべての option に `.` が含まれない場合は整数リテラル
+（例: `count = 3`）、いずれかに `.` がある場合は浮動小数点リテラル（例: `weight = 2.0`）
+として書き込みます。
+
 ## ライセンス
 
 MIT License

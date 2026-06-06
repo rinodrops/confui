@@ -133,6 +133,14 @@ Full schema reference, widget guide, theming, and localization:
 
 **https://emotiongraphics.jp/docs/confui/**
 
+### `segmented_control` and `type`
+
+`segmented_control` reads and writes `string` values by default (`type` omitted or
+`type = "string"`). Set `type = "number"` to store TOML numbers instead; `options`
+are numeric strings used as segment labels and stored values. When every option
+omits `.`, whole numbers are written as integer literals (e.g. `count = 3`); if any
+option contains `.`, floats are used (e.g. `weight = 2.0`).
+
 ## License
 
 MIT License

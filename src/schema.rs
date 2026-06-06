@@ -312,11 +312,9 @@ pub struct Field {
     pub key: String,
     #[serde(default)]
     pub label: LocalizedString,
-    /// Declared TOML value type. Parsed (and validated against `FieldType`) to
-    /// catch typos in the schema, but rendering is driven by `widget`, so the
-    /// value itself is never read at runtime.
+    /// Declared TOML value type (`string` by default). Drives read/write for
+    /// `segmented_control` (`string` vs `number`); otherwise used for schema validation.
     #[serde(rename = "type", default)]
-    #[allow(dead_code)]
     pub field_type: FieldType,
     pub widget: WidgetKind,
     /// Generic one-line hint shown below the widget.
