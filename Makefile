@@ -1,5 +1,5 @@
 # ============================================================
-# ConfUI — production build targets
+# Settings — production build targets
 # ============================================================
 # Usage:
 #   make               — release binary (macOS/Linux, current arch)
@@ -17,12 +17,12 @@
 #   rustup target add x86_64-pc-windows-gnu
 #
 # Outputs:
-#   target/release/confui          — binary for bundling into the parent app
-#   dist/confui-windows/ConfUI.exe — Windows executable (distributed standalone)
+#   target/release/settings            — binary for bundling into the parent app
+#   dist/settings-windows/Settings.exe — Windows executable (distributed standalone)
 # ============================================================
 
-APP_NAME  := ConfUI
-EXE_NAME  := confui
+APP_NAME  := Settings
+EXE_NAME  := settings
 VERSION   := $(shell awk -F'"' '/^version *=/{print $$2; exit}' Cargo.toml)
 
 # Schema file to embed.
@@ -40,8 +40,8 @@ APPICON_ICO := assets/appicon.ico
 # A space-free CARGO_TARGET_DIR is used to work around a dlltool limitation
 # (mingw-w64 dlltool fails on paths containing spaces).
 WIN_TARGET     := x86_64-pc-windows-gnu
-WIN_TARGET_DIR := /tmp/confui-win
-WIN_DIR        := $(DIST)/confui-windows
+WIN_TARGET_DIR := /tmp/settings-win
+WIN_DIR        := $(DIST)/settings-windows
 WIN_EXE        := $(WIN_DIR)/$(APP_NAME).exe
 WIN_ZIP        := $(DIST)/$(APP_NAME)-v$(VERSION)-windows-x86_64.zip
 
@@ -107,7 +107,7 @@ appicon-ico:
 ## macOS / Linux release binary (current arch, for bundling into parent app).
 binary: $(ICON_TTF)
 	@echo ">>> Building release binary  (schema: $(ABS_SCHEMA))"
-	CONFUI_SCHEMA=$(ABS_SCHEMA) cargo build --release
+	SETTINGS_SCHEMA=$(ABS_SCHEMA) cargo build --release
 	@echo ">>> Output: $(RELEASE_BIN)"
 
 ## Windows .exe (cross-compiled from macOS via mingw-w64).
@@ -115,15 +115,15 @@ binary: $(ICON_TTF)
 ##                  rustup target add x86_64-pc-windows-gnu
 win: $(ICON_TTF) $(APPICON_ICO)
 	@echo ">>> Building Windows .exe  (schema: $(ABS_SCHEMA))"
-	CONFUI_SCHEMA=$(ABS_SCHEMA) CARGO_TARGET_DIR="$(WIN_TARGET_DIR)" \
+	SETTINGS_SCHEMA=$(ABS_SCHEMA) CARGO_TARGET_DIR="$(WIN_TARGET_DIR)" \
 		cargo build --release --target $(WIN_TARGET)
 	@mkdir -p "$(WIN_DIR)"
-	@cp "$(WIN_TARGET_DIR)/$(WIN_TARGET)/release/confui.exe" "$(WIN_EXE)"
+	@cp "$(WIN_TARGET_DIR)/$(WIN_TARGET)/release/settings.exe" "$(WIN_EXE)"
 	@echo ">>> Output: $(WIN_EXE)"
 
 ## Package the Windows .exe into a distributable zip.
 win-zip: win
-	@cd "$(DIST)" && zip -j "$(notdir $(WIN_ZIP))" "confui-windows/$(APP_NAME).exe"
+	@cd "$(DIST)" && zip -j "$(notdir $(WIN_ZIP))" "settings-windows/$(APP_NAME).exe"
 	@echo ">>> Package: $(WIN_ZIP)"
 
 ## Remove build artefacts.

@@ -1,5 +1,5 @@
 # config.toml
-# Configuration file for comprehensive testing of all ConfUI widgets.
+# Configuration file for comprehensive testing of all Settings widgets.
 # Compatible schema: schema.toml
 
 [display]

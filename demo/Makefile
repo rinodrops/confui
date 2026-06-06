@@ -1,5 +1,5 @@
 # ============================================================
-# ConfUI — demo build targets
+# Settings — demo build targets
 # ============================================================
 # Generates standalone demo binaries for all platforms, embedding
 # ../../schema.toml (the project's test schema) as the schema.
@@ -31,16 +31,16 @@
 empty     :=
 space     := $(empty) $(empty)
 
-APP_NAME  := ConfUI
-EXE_NAME  := confui
-BUNDLE_ID := jp.emotiongraphics.confui
+APP_NAME  := Settings
+EXE_NAME  := settings
+BUNDLE_ID := jp.emotiongraphics.settings
 VERSION   := $(shell awk -F'"' '/^version *=/{print $$2; exit}' ../Cargo.toml)
 MIN_MACOS := 11.0
 
 # Schema: the demo test schema, co-located with this Makefile in demo/.
 SCHEMA := $(abspath schema.toml)
 
-# Cargo invocation referencing the parent confui/ package.
+# Cargo invocation referencing the parent settings package.
 CARGO_MANIFEST := --manifest-path ../Cargo.toml
 
 DIST      := dist
@@ -70,8 +70,8 @@ APP_DMG      := $(DIST)/$(APP_NAME)-v$(VERSION)-darwin-universal.dmg
 DMG_SETTINGS := dmg_settings.py
 
 WIN_TARGET     := x86_64-pc-windows-gnu
-WIN_TARGET_DIR := /tmp/confui-demo-win
-WIN_DIR        := $(DIST)/confui-windows
+WIN_TARGET_DIR := /tmp/settings-demo-win
+WIN_DIR        := $(DIST)/settings-windows
 WIN_EXE        := $(WIN_DIR)/$(APP_NAME).exe
 WIN_ZIP        := $(DIST)/$(APP_NAME)-v$(VERSION)-windows-x86_64.zip
 
@@ -108,9 +108,9 @@ all: mac
 ##   Requires: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 mac: $(ICON_TTF) | $(MACOS_DIR_T) $(RES_DIR_T)
 	@echo ">>> Building demo macOS .app  (schema: $(SCHEMA))"
-	MACOSX_DEPLOYMENT_TARGET=$(MIN_MACOS) CONFUI_SCHEMA=$(SCHEMA) \
+	MACOSX_DEPLOYMENT_TARGET=$(MIN_MACOS) SETTINGS_SCHEMA=$(SCHEMA) \
 		cargo build $(CARGO_MANIFEST) --release --target aarch64-apple-darwin
-	MACOSX_DEPLOYMENT_TARGET=$(MIN_MACOS) CONFUI_SCHEMA=$(SCHEMA) \
+	MACOSX_DEPLOYMENT_TARGET=$(MIN_MACOS) SETTINGS_SCHEMA=$(SCHEMA) \
 		cargo build $(CARGO_MANIFEST) --release --target x86_64-apple-darwin
 	lipo -create -output "$(MACOS_DIR)/$(APP_NAME)" \
 		../target/aarch64-apple-darwin/release/$(EXE_NAME) \
@@ -179,15 +179,15 @@ _icns_build: | $(RES_DIR_T)
 ##                  rustup target add x86_64-pc-windows-gnu
 win: $(ICON_TTF) $(APPICON_ICO)
 	@echo ">>> Building demo Windows .exe  (schema: $(SCHEMA))"
-	CONFUI_SCHEMA=$(SCHEMA) CARGO_TARGET_DIR="$(WIN_TARGET_DIR)" \
+	SETTINGS_SCHEMA=$(SCHEMA) CARGO_TARGET_DIR="$(WIN_TARGET_DIR)" \
 		cargo build $(CARGO_MANIFEST) --release --target $(WIN_TARGET)
 	@mkdir -p "$(WIN_DIR)"
-	@cp "$(WIN_TARGET_DIR)/$(WIN_TARGET)/release/confui.exe" "$(WIN_EXE)"
+	@cp "$(WIN_TARGET_DIR)/$(WIN_TARGET)/release/settings.exe" "$(WIN_EXE)"
 	@echo ">>> Output: $(WIN_EXE)"
 
 ## Package the Windows .exe into a distributable zip.
 win-zip: win
-	@cd "$(DIST)" && zip -j "$(notdir $(WIN_ZIP))" "confui-windows/$(APP_NAME).exe"
+	@cd "$(DIST)" && zip -j "$(notdir $(WIN_ZIP))" "settings-windows/$(APP_NAME).exe"
 	@echo ">>> Package: $(WIN_ZIP)"
 
 # ── Linux demo binary ────────────────────────────────────────
@@ -195,7 +195,7 @@ win-zip: win
 ## Linux release binary (demo, run natively on a Linux host).
 linux: $(ICON_TTF)
 	@echo ">>> Building demo Linux binary  (schema: $(SCHEMA))"
-	CONFUI_SCHEMA=$(SCHEMA) cargo build $(CARGO_MANIFEST) --release
+	SETTINGS_SCHEMA=$(SCHEMA) cargo build $(CARGO_MANIFEST) --release
 	@mkdir -p "$(DIST)"
 	@cp ../target/release/$(EXE_NAME) "$(LINUX_BIN)"
 	@echo ">>> Output: $(LINUX_BIN)"
@@ -258,7 +258,7 @@ $(RES_DIR_T): | $(CONTENTS_T)
 
 # ── Maintenance ──────────────────────────────────────────────
 
-## Remove demo build artefacts (does not touch confui/target/).
+## Remove demo build artefacts (does not touch parent target/).
 clean:
 	rm -rf $(DIST) $(WIN_TARGET_DIR)
 

@@ -691,23 +691,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "confui"
-version = "0.1.0"
-dependencies = [
- "eframe",
- "egui",
- "notify",
- "objc2 0.6.4",
- "objc2-foundation 0.3.2",
- "rfd",
- "serde",
- "toml 0.8.23",
- "toml_edit 0.22.27",
- "windows-sys 0.59.0",
- "winresource",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2918,6 +2901,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
 dependencies = [
  "serde_core",
+]
+
+[[package]]
+name = "settings"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui",
+ "notify",
+ "objc2 0.6.4",
+ "objc2-foundation 0.3.2",
+ "rfd",
+ "serde",
+ "toml 0.8.23",
+ "toml_edit 0.22.27",
+ "windows-sys 0.59.0",
+ "winresource",
 ]
 
 [[package]]

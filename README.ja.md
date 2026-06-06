@@ -1,4 +1,4 @@
-# ConfUI
+# Settings
 
 TOML 形式の設定ファイルを持つアプリケーション向けの，独立した設定ウィンドウ。
 別プロセスのバイナリとして動作し，TOML の読み書きのみを担うため，親アプリのライフサイクルに依存しません。
@@ -53,14 +53,14 @@ max    = 65535
 **2. ビルド:**
 
 ```bash
-cd confui
-CONFUI_SCHEMA=/path/to/your/schema.toml make
+cd settings
+SETTINGS_SCHEMA=/path/to/your/schema.toml make
 ```
 
 **3. 親アプリから起動:**
 
 ```rust
-std::process::Command::new("path/to/confui").spawn()?;
+std::process::Command::new("path/to/settings").spawn()?;
 ```
 
 ## 親アプリへの組み込み
@@ -70,40 +70,40 @@ std::process::Command::new("path/to/confui").spawn()?;
 ```
 MyApp.app/Contents/MacOS/
 ├── MyApp
-└── confui
+└── settings
 ```
 
 ```rust
-let confui = std::env::current_exe()?
+let settings = std::env::current_exe()?
     .parent().unwrap()
-    .join("confui");
-std::process::Command::new(confui).spawn()?;
+    .join("settings");
+std::process::Command::new(settings).spawn()?;
 ```
 
 ### Windows
 
-`ConfUI.exe` を親アプリの実行ファイルと同じディレクトリに置き，インストーラーで両方を配置します。
+`Settings.exe` を親アプリの実行ファイルと同じディレクトリに置き，インストーラーで両方を配置します。
 
 ### Cargo workspace（Git submodule）
 
 ```toml
 # 親アプリの Cargo.toml
 [workspace]
-members = ["myapp", "confui"]
+members = ["myapp", "settings"]
 ```
 
-スキーマはビルド時に `CONFUI_SCHEMA` 環境変数で指定します。`make` のデフォルトは `../schema.toml`（`confui/` の一階層上，親アプリのスキーマ）です。`CONFUI_SCHEMA` を設定せず `cargo build` を直接実行した場合は `demo/schema.toml` にフォールバックします。
+スキーマはビルド時に `SETTINGS_SCHEMA` 環境変数で指定します。`make` のデフォルトは `../schema.toml`（クレートルートの一階層上，親アプリのスキーマ）です。`SETTINGS_SCHEMA` を設定せず `cargo build` を直接実行した場合は `demo/schema.toml` にフォールバックします。
 
 ## ビルド
 
 | 場面                                 | 使用されるスキーマ                                          |
 | ------------------------------------ | ----------------------------------------------------------- |
-| `make`（上書きなし）                 | `../schema.toml` — `confui/` の一階層上，親アプリのスキーマ |
+| `make`（上書きなし）                 | `../schema.toml` — クレートルートの一階層上，親アプリのスキーマ |
 | `make SCHEMA=/path/to/schema.toml`   | 指定パス                                                    |
-| `CONFUI_SCHEMA` なしの `cargo build` | `demo/schema.toml` — スタンドアロン開発用フォールバック     |
+| `SETTINGS_SCHEMA` なしの `cargo build` | `demo/schema.toml` — スタンドアロン開発用フォールバック     |
 
 ```bash
-cd confui
+cd settings
 
 # 初回 / アイコンスタイル変更時
 make icons                          # Material Symbols をダウンロード（rounded）
@@ -124,14 +124,14 @@ make clean
 
 | パス                             | 説明                                           |
 | -------------------------------- | ---------------------------------------------- |
-| `target/release/confui`          | macOS / Linux アプリに同梱するための生バイナリ |
-| `dist/confui-windows/ConfUI.exe` | Windows 実行ファイル                           |
+| `target/release/settings`            | macOS / Linux アプリに同梱するための生バイナリ |
+| `dist/settings-windows/Settings.exe` | Windows 実行ファイル                           |
 
 ## ドキュメント
 
 スキーマリファレンス・ウィジェットガイド・テーマ・ローカライズの詳細:
 
-**https://emotiongraphics.jp/docs/confui/**
+**https://emotiongraphics.jp/docs/settings/**
 
 ### `segmented_control` と `type`
 

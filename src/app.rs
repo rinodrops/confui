@@ -92,7 +92,7 @@ const TEXTEDIT_MARGIN_Y: f32 = 4.0;
 // ---------------------------------------------------------------------------
 // App state
 
-pub struct ConfUiApp {
+pub struct SettingsApp {
     schema: Schema,
     config: ConfigStore,
     selected_tab: usize,
@@ -148,7 +148,7 @@ struct DeleteConfirm {
 
 // ---------------------------------------------------------------------------
 
-impl ConfUiApp {
+impl SettingsApp {
     pub fn new(cc: &eframe::CreationContext, schema: Schema, config: ConfigStore) -> Self {
         let light = Palette::from_schema(&schema, Variant::Light);
         let dark = Palette::from_schema(&schema, Variant::Dark);
@@ -243,7 +243,7 @@ pub fn compute_window_size(schema: &crate::schema::Schema) -> [f32; 2] {
 
 // ---------------------------------------------------------------------------
 
-impl eframe::App for ConfUiApp {
+impl eframe::App for SettingsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Resolve the active palette against the OS theme (it can change while
         // the app is running) and re-apply the theme every frame so eframe's
@@ -1228,7 +1228,7 @@ fn render_widget_inner(
 
 /// Returns `Some((key_path, rx))` when the user clicked the browse button and a
 /// background file-picker thread was spawned.  The caller should store this in
-/// `ConfUiApp::pending_file_pick`.
+/// `SettingsApp::pending_file_pick`.
 fn render_file_path(
     ui: &mut egui::Ui,
     field: &Field,
