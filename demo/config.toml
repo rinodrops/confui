@@ -1,0 +1,96 @@
+# config.toml
+# Configuration file for comprehensive testing of all ConfUI widgets.
+# Compatible schema: schema.toml
+
+[display]
+language = "en"
+
+# ── Text ──────────────────────────────────────────────────────────────
+
+[text]
+basic = "Default value for basic text input"
+with_hint = "hint@example.com"
+constrained = "Short text"
+password = "p@ssw0rd123"
+notes = """
+Text on the first line
+Text on the second line
+Text on the third line
+"""
+
+# ── Booleans ────────────────────────────────────────────────────────────────
+
+[booleans]
+check_basic = false
+check_sublabel = true
+toggle_basic = false
+toggle_hint = true
+
+# ── Selection ──────────────────────────────────────────────────────────────────
+
+[selection]
+dropdown = "beta"
+segment3 = "Center"
+segment5 = "XL"
+exclusive_mode = "direct"
+
+# ── Numeric ──────────────────────────────────────────────────────────────────
+
+[numeric]
+slider_basic = 42.0
+slider_suffix = 200.0
+drag_basic = 25.0
+drag_suffix = 14.0
+
+# ── Miscellaneous ────────────────────────────────────────────────────────────────
+
+[misc]
+hotkey = "cmd+shift+h"
+color = "#b6766d"
+file = ""
+directory = ""
+
+[misc.kv_map]
+"first key" = "first value"
+"second key" = "second value"
+
+# ── Fixed Sections ────────────────────────────────────────────────────────
+# sections: alpha / beta / gamma
+# tab_style = "segmented", so the 3 items are displayed as a segmented control.
+
+[fixed_sections.alpha]
+name = "Alpha"
+description = "The first fixed section"
+password = "alpha_secret"
+mode = "opt1"
+
+[fixed_sections.beta]
+name = "Beta"
+description = "The second fixed section"
+password = "beta_secret"
+mode = "opt2"
+
+[fixed_sections.gamma]
+name = "Gamma"
+description = "The third fixed section"
+password = ""
+mode = "opt3"
+
+# ── Variable Sections ────────────────────────────────────────────────────────
+# sections: item1 / item2 (user can add or delete)
+# category refers to the keys of fixed_sections (alpha / beta / gamma) using options_from.
+
+[variable_sections.item1]
+label = "The first item"
+shortcut = "cmd+1"
+category = "alpha"
+description = """
+This is the first item in the variable section.
+This is a multi-line description.
+"""
+
+[variable_sections.item2]
+label = "The second item"
+shortcut = "cmd+2"
+category = "beta"
+description = "This is the second item in the variable section."

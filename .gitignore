@@ -1,0 +1,7 @@
+/target
+/dist
+/assets/icons.ttf
+/assets/icons.codepoints
+/assets/appicon.ico
+*.toml.tmp
+.DS_Store

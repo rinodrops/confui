@@ -1,0 +1,32 @@
+[package]
+name = "confui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.31"
+egui = "0.31"
+toml = "0.8"
+toml_edit = "0.22"
+serde = { version = "1", features = ["derive"] }
+rfd = "0.15"
+notify = "6"
+
+# Native locale detection.
+# macOS: NSLocale.preferredLanguages reflects the per-app override
+#        (System Settings → Language & Region → Applications), then the
+#        system-wide Preferred Languages list.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSLocale", "NSString"] }
+
+# Windows: GetUserPreferredUILanguages returns the display language.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Globalization"] }
+
+[profile.release]
+opt-level = 3
+strip = true
+
+[build-dependencies]
+winresource = "0.1"

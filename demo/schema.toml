@@ -1,0 +1,368 @@
+# test_schema.toml
+# ConfUI: Schema for comprehensive testing of all widgets.
+# This schema is designed to verify all widget types and their key options.
+#
+# Localization:
+#   Any user-facing string (tab/field label, hint, sublabel, file_filter,
+#   key/value labels, exclusive-variant label) may be written either as a bare
+#   string (used for every language) or as a per-language inline table, e.g.
+#       label = "Name"                       # language-agnostic
+#       label = { en = "Name", ja = "名前" } # localized
+#   The active language is chosen by the resolver in src/i18n.rs.
+
+icon_style       = "rounded"
+theme            = "os"
+lang             = "os"
+save_button      = "os"
+content_width  = 700
+content_height = 370
+lang_key         = "display.language"
+
+# background_color = "#ffffff"
+# text_color       = "#272727"
+# tab_text_color   = "#808080"
+# accent_color     = "#3478f7"
+# selection_bg_color = "#ffffff"
+
+# Dark theme color overrides (used when theme = "dark" or "os" resolves to dark).
+[dark]
+# background_color = "#1e1e1e"
+# text_color       = "#e0e0e0"
+# tab_text_color   = "#9a9a9a"
+# accent_color     = "#3aa0ff"
+
+# ── Tab 1: Text input ──────────────────────────────────────────────────────
+# text_input (basic / with hint / width-constrained)
+# secret_input (password with eye-icon toggle)
+# multiline (multi-row, configurable row count)
+
+[[tabs]]
+id    = "text"
+label = { en = "Text", ja = "テキスト", de = "Text" }
+icon  = "text_fields"
+
+[[tabs.fields]]
+key    = "text.basic"
+label  = { en = "Basic text", ja = "基本テキスト", de = "Einfacher Text" }
+type   = "string"
+widget = "text_input"
+
+[[tabs.fields]]
+key    = "text.with_hint"
+label  = { en = "With hint", ja = "ヒント付き", de = "Mit Hinweis" }
+type   = "string"
+widget = "text_input"
+hint   = { en = "Example: hello@example.com", ja = "入力例: hello@example.com", de = "Beispiel: hello@example.com" }
+
+[[tabs.fields]]
+key       = "text.constrained"
+label     = { en = "Width-constrained", ja = "幅制限付き", de = "Breitenbegrenzt" }
+type      = "string"
+widget    = "text_input"
+max_width = 220
+
+#[[tabs.fields]]
+#widget = "separator"
+
+[[tabs.fields]]
+key    = "text.password"
+label  = { en = "Secret input", ja = "シークレット入力", de = "Geheimeingabe" }
+type   = "string"
+widget = "secret_input"
+
+[[tabs.fields]]
+widget = "separator"
+
+[[tabs.fields]]
+key    = "text.notes"
+label  = { en = "Multiline text", ja = "複数行テキスト", de = "Mehrzeiliger Text" }
+type   = "string"
+widget = "multiline"
+rows   = 5
+
+# ── Tab 2: Booleans ─────────────────────────────────────────────────────────
+# checkbox (basic / with sublabel)
+# toggle (basic / with hint)
+
+[[tabs]]
+id    = "booleans"
+label = { en = "Booleans", ja = "真偽値", de = "Wahrheitswerte" }
+icon  = "toggle_on"
+
+[[tabs.fields]]
+key    = "booleans.check_basic"
+label  = { en = "Basic checkbox", ja = "基本チェックボックス", de = "Einfaches Kontrollkästchen" }
+type   = "bool"
+widget = "checkbox"
+
+[[tabs.fields]]
+key      = "booleans.check_sublabel"
+label    = ""
+type     = "bool"
+widget   = "checkbox"
+sublabel = { en = "With sublabel (label sits to the right of the checkbox)", ja = "サブラベル付き（ラベルがチェックボックスの右に配置される）", de = "Mit Sublabel (Label sitzt rechts vom Kontrollkästchen)" }
+
+[[tabs.fields]]
+widget = "separator"
+
+[[tabs.fields]]
+key    = "booleans.toggle_basic"
+label  = { en = "Basic toggle", ja = "基本トグル", de = "Einfacher Schalter" }
+type   = "bool"
+widget = "toggle"
+
+[[tabs.fields]]
+key    = "booleans.toggle_hint"
+label  = { en = "Toggle with hint", ja = "ヒント付きトグル", de = "Schalter mit Hinweis" }
+type   = "bool"
+widget = "toggle"
+hint   = { en = "Enabling this option changes the behavior", ja = "このオプションを有効にすると挙動が変わります", de = "Das Aktivieren dieser Option ändert das Verhalten" }
+
+# ── Tab 3: Selection ────────────────────────────────────────────────────────
+# select (dropdown)
+# segmented_control (static options / width-constrained)
+# exclusive_radio (toggle between secret_input and text_input)
+#
+# NOTE: `options` values double as the value stored in the config file, so they
+# are NOT localized — only display-only strings (labels, hints) are.
+
+[[tabs]]
+id    = "selection"
+label = { en = "Selection", ja = "選択", de = "Auswahl" }
+icon  = "list"
+
+[[tabs.fields]]
+key     = "selection.dropdown"
+label   = { en = "Dropdown (select)", ja = "ドロップダウン（select）", de = "Dropdown (select)" }
+type    = "string"
+widget  = "select"
+options = ["alpha", "beta", "gamma", "delta"]
+
+[[tabs.fields]]
+widget = "separator"
+
+[[tabs.fields]]
+key       = "selection.segment3"
+label     = { en = "Segmented control (3 items)", ja = "セグメンテッドコントロール（3 項目）", de = "Segmentsteuerung (3 Einträge)" }
+type      = "string"
+widget    = "segmented_control"
+options   = ["Left", "Center", "Right"]
+max_width = 300
+
+[[tabs.fields]]
+key       = "selection.segment5"
+label     = { en = "Segmented control (5 items · width-constrained)", ja = "セグメンテッドコントロール（5 項目 · 幅制限）", de = "Segmentsteuerung (5 Einträge · breitenbegrenzt)" }
+type      = "string"
+widget    = "segmented_control"
+options   = ["XS", "S", "M", "L", "XL"]
+max_width = 280
+
+[[tabs.fields]]
+widget = "separator"
+
+[[tabs.fields]]
+key         = "selection.exclusive"
+label       = { en = "Exclusive radio (exclusive_radio)", ja = "排他ラジオ（exclusive_radio）", de = "Exklusivauswahl (exclusive_radio)" }
+type        = "string"
+widget      = "exclusive_radio"
+hint_direct = { en = "Enter the value directly. It is stored in plain text in the config file.", ja = "値を直接入力します。設定ファイルに平文で保存されます。", de = "Geben Sie den Wert direkt ein. Er wird als Klartext in der Konfigurationsdatei gespeichert." }
+hint_env    = { en = "Specify an environment variable name. The value is resolved at runtime.", ja = "環境変数名を指定します。値は実行時に解決されます。", de = "Geben Sie einen Umgebungsvariablennamen an. Der Wert wird zur Laufzeit aufgelöst." }
+
+[tabs.fields.exclusive]
+mode_key     = "exclusive_mode"
+mode_default = "direct"
+variants     = [
+  { value = "direct", label = { en = "Direct input", ja = "直接入力", de = "Direkte Eingabe" }, field_key = "exclusive_direct", widget = "secret_input" },
+  { value = "env",    label = { en = "Environment variable", ja = "環境変数", de = "Umgebungsvariable" }, field_key = "exclusive_env", widget = "text_input" },
+]
+
+# ── Tab 4: Numeric ──────────────────────────────────────────────────────────
+# slider (basic / with suffix)
+# drag_value (basic / with suffix + width-constrained)
+
+[[tabs]]
+id    = "numeric"
+label = { en = "Numeric", ja = "数値", de = "Numerisch" }
+icon  = "numbers"
+
+[[tabs.fields]]
+key    = "numeric.slider_basic"
+label  = { en = "Slider (basic)", ja = "スライダー（基本）", de = "Schieberegler (einfach)" }
+type   = "number"
+widget = "slider"
+min    = 0
+max    = 100
+step   = 1
+
+[[tabs.fields]]
+key    = "numeric.slider_suffix"
+label  = { en = "Slider (with suffix)", ja = "スライダー（接尾辞付き）", de = "Schieberegler (mit Suffix)" }
+type   = "number"
+widget = "slider"
+min    = 100
+max    = 400
+step   = 10
+suffix = " px"
+
+[[tabs.fields]]
+widget = "separator"
+
+[[tabs.fields]]
+key       = "numeric.drag_basic"
+label     = { en = "Drag value (basic)", ja = "ドラッグ値（基本）", de = "Zieheingabe (einfach)" }
+type      = "number"
+widget    = "drag_value"
+min       = 0
+max       = 100
+step      = 1
+max_width = 120
+
+[[tabs.fields]]
+key       = "numeric.drag_suffix"
+label     = { en = "Drag value (with suffix)", ja = "ドラッグ値（接尾辞付き）", de = "Zieheingabe (mit Suffix)" }
+type      = "number"
+widget    = "drag_value"
+min       = 5
+max       = 72
+step      = 0.5
+suffix    = " pt"
+max_width = 120
+
+# ── Tab 5: Misc ─────────────────────────────────────────────────────────────
+# hotkey
+# color_picker
+# file_path (file selection / directory selection)
+# key_value_map (custom header labels)
+
+[[tabs]]
+id    = "misc"
+label = { en = "Misc", ja = "その他", de = "Sonstiges" }
+icon  = "widgets"
+
+[[tabs.fields]]
+key    = "misc.hotkey"
+label  = { en = "Hotkey", ja = "ホットキー", de = "Tastenkürzel" }
+type   = "string"
+widget = "hotkey"
+
+[[tabs.fields]]
+widget = "separator"
+
+[[tabs.fields]]
+key    = "misc.color"
+label  = { en = "Color picker", ja = "カラーピッカー", de = "Farbwähler" }
+type   = "string"
+widget = "color_picker"
+
+[[tabs.fields]]
+widget = "separator"
+
+[[tabs.fields]]
+key             = "misc.file"
+label           = { en = "File path", ja = "ファイルパス", de = "Dateipfad" }
+type            = "string"
+widget          = "file_path"
+file_filter     = { en = "TOML files", ja = "TOML ファイル", de = "TOML-Dateien" }
+file_extensions = ["toml", "txt"]
+
+[[tabs.fields]]
+key          = "misc.directory"
+label        = { en = "Directory path", ja = "ディレクトリパス", de = "Verzeichnispfad" }
+type         = "string"
+widget       = "file_path"
+is_directory = true
+
+[[tabs.fields]]
+widget = "separator"
+
+[[tabs.fields]]
+key         = "misc.kv_map"
+label       = { en = "Key-value map", ja = "キーと値のマップ", de = "Schlüssel-Wert-Zuordnung" }
+type        = "string"
+widget      = "key_value_map"
+key_label   = { en = "Key", ja = "キー", de = "Schlüssel" }
+value_label = { en = "Value", ja = "値", de = "Wert" }
+
+# ── Tab 6: Fixed sections ───────────────────────────────────────────────────
+# section_map: allow_add_remove = false, tab_style = "segmented"
+# sections: alpha / beta / gamma (loaded dynamically from the config file)
+# fields: text_input, secret_input, select
+
+[[tabs]]
+id    = "fixed_sections"
+label = { en = "Fixed", ja = "固定セクション", de = "Feste Abschnitte" }
+icon  = "grid_view"
+
+[tabs.section_map]
+key_prefix       = "fixed_sections"
+allow_add_remove = false
+tab_style        = "segmented"
+max_width        = 420
+
+[[tabs.section_map.fields]]
+key    = "name"
+label  = { en = "Name", ja = "名前", de = "Name" }
+type   = "string"
+widget = "text_input"
+
+[[tabs.section_map.fields]]
+key    = "description"
+label  = { en = "Description", ja = "説明", de = "Beschreibung" }
+type   = "string"
+widget = "text_input"
+hint   = { en = "Enter a short description", ja = "短い説明文を入力してください", de = "Kurze Beschreibung eingeben" }
+
+[[tabs.section_map.fields]]
+key    = "password"
+label  = { en = "Password", ja = "パスワード", de = "Passwort" }
+type   = "string"
+widget = "secret_input"
+
+[[tabs.section_map.fields]]
+key     = "mode"
+label   = { en = "Mode", ja = "モード", de = "Modus" }
+type    = "string"
+widget  = "select"
+options = ["opt1", "opt2", "opt3"]
+
+# ── Tab 7: Variable sections ────────────────────────────────────────────────
+# section_map: allow_add_remove = true, tab_style = "underline"
+# fields: text_input, hotkey, segmented_control (options_from references the
+#         fixed-section keys), multiline
+
+[[tabs]]
+id    = "variable_sections"
+label = { en = "Variable", ja = "可変セクション", de = "Variable Abschnitte" }
+icon  = "format_list_bulleted"
+
+[tabs.section_map]
+key_prefix       = "variable_sections"
+allow_add_remove = true
+tab_style        = "underline"
+
+[[tabs.section_map.fields]]
+key    = "label"
+label  = { en = "Label", ja = "ラベル", de = "Bezeichnung" }
+type   = "string"
+widget = "text_input"
+
+[[tabs.section_map.fields]]
+key    = "shortcut"
+label  = { en = "Shortcut", ja = "ショートカット", de = "Tastenkürzel" }
+type   = "string"
+widget = "hotkey"
+
+[[tabs.section_map.fields]]
+key          = "category"
+label        = { en = "Category (options_from reference)", ja = "カテゴリ（options_from 参照）", de = "Kategorie (options_from Referenz)" }
+type         = "string"
+widget       = "segmented_control"
+options_from = "fixed_sections"
+max_width    = 320
+
+[[tabs.section_map.fields]]
+key    = "description"
+label  = { en = "Description", ja = "説明", de = "Beschreibung" }
+type   = "string"
+widget = "multiline"
+rows   = 4
