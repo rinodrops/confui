@@ -2,7 +2,7 @@
 // it with `include_bytes!(concat!(env!("OUT_DIR"), "/schema.toml"))`.
 //
 // Schema source resolution (first match wins):
-//   1. CONFUI_SCHEMA env var  — absolute path or relative to the workspace root
+//   1. SETTINGS_SCHEMA env var — absolute path or relative to the workspace root
 //   2. {CARGO_MANIFEST_DIR}/demo/schema.toml  (default for standalone dev)
 
 use std::path::PathBuf;
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 fn main() {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
 
-    let schema_src = std::env::var("CONFUI_SCHEMA")
+    let schema_src = std::env::var("SETTINGS_SCHEMA")
         .map(PathBuf::from)
         .unwrap_or_else(|_| manifest_dir.join("demo/schema.toml"));
 
@@ -20,14 +20,14 @@ fn main() {
     std::fs::copy(&schema_src, &schema_dest).unwrap_or_else(|e| {
         panic!(
             "Failed to copy schema from '{}': {e}\n\
-             Set CONFUI_SCHEMA=/path/to/schema.toml to override.",
+             Set SETTINGS_SCHEMA=/path/to/schema.toml to override.",
             schema_src.display()
         )
     });
 
     // Re-run the build script when the schema or the env var changes.
     println!("cargo:rerun-if-changed={}", schema_src.display());
-    println!("cargo:rerun-if-env-changed=CONFUI_SCHEMA");
+    println!("cargo:rerun-if-env-changed=SETTINGS_SCHEMA");
 
     // Optional icon assets — present only when `make icons` was run.
     // When found, copy them to OUT_DIR and set the `has_icons` cfg flag so

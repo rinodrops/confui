@@ -1,4 +1,4 @@
-# ConfUI
+# Settings
 
 A standalone settings window for applications that use TOML configuration files.
 Ships as a separate binary — it reads and writes TOML only, so its lifecycle is fully independent of the parent app.
@@ -53,14 +53,14 @@ max    = 65535
 **2. Build:**
 
 ```bash
-cd confui
-CONFUI_SCHEMA=/path/to/your/schema.toml make
+cd settings
+SETTINGS_SCHEMA=/path/to/your/schema.toml make
 ```
 
 **3. Launch from your app:**
 
 ```rust
-std::process::Command::new("path/to/confui").spawn()?;
+std::process::Command::new("path/to/settings").spawn()?;
 ```
 
 ## Embedding in Your App
@@ -70,40 +70,40 @@ std::process::Command::new("path/to/confui").spawn()?;
 ```
 MyApp.app/Contents/MacOS/
 ├── MyApp
-└── confui
+└── settings
 ```
 
 ```rust
-let confui = std::env::current_exe()?
+let settings = std::env::current_exe()?
     .parent().unwrap()
-    .join("confui");
-std::process::Command::new(confui).spawn()?;
+    .join("settings");
+std::process::Command::new(settings).spawn()?;
 ```
 
 ### Windows
 
-Place `ConfUI.exe` in the same directory as your executable and install both together.
+Place `Settings.exe` in the same directory as your executable and install both together.
 
 ### Cargo workspace (Git submodule)
 
 ```toml
 # Parent app's Cargo.toml
 [workspace]
-members = ["myapp", "confui"]
+members = ["myapp", "settings"]
 ```
 
-Point the schema via `CONFUI_SCHEMA` when building. The `make` default is `../schema.toml` (the parent app's schema, one level up from `confui/`). When building directly with `cargo build` without `CONFUI_SCHEMA`, the fallback is `demo/schema.toml`.
+Point the schema via `SETTINGS_SCHEMA` when building. The `make` default is `../schema.toml` (the parent app's schema, one level up from the crate root). When building directly with `cargo build` without `SETTINGS_SCHEMA`, the fallback is `demo/schema.toml`.
 
 ## Build
 
 | Scenario                              | Schema used                                                         |
 | ------------------------------------- | ------------------------------------------------------------------- |
-| `make` (no override)                  | `../schema.toml` — parent app's schema, one level up from `confui/` |
+| `make` (no override)                  | `../schema.toml` — parent app's schema, one level up from the crate root |
 | `make SCHEMA=/path/to/schema.toml`    | the specified path                                                  |
-| `cargo build` without `CONFUI_SCHEMA` | `demo/schema.toml` — standalone dev fallback                        |
+| `cargo build` without `SETTINGS_SCHEMA` | `demo/schema.toml` — standalone dev fallback                        |
 
 ```bash
-cd confui
+cd settings
 
 # First run / when changing icon style
 make icons                          # Download Material Symbols (rounded)
@@ -124,14 +124,14 @@ Output:
 
 | Path                             | Description                               |
 | -------------------------------- | ----------------------------------------- |
-| `target/release/confui`          | Binary for embedding in a macOS/Linux app |
-| `dist/confui-windows/ConfUI.exe` | Windows executable                        |
+| `target/release/settings`            | Binary for embedding in a macOS/Linux app |
+| `dist/settings-windows/Settings.exe` | Windows executable                        |
 
 ## Documentation
 
 Full schema reference, widget guide, theming, and localization:
 
-**https://emotiongraphics.jp/docs/confui/**
+**https://emotiongraphics.jp/docs/settings/**
 
 ### `segmented_control` and `type`
 

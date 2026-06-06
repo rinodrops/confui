@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Deserializer};
 
 // build.rs copies the schema into OUT_DIR/schema.toml at compile time.
-// Override the source path with: CONFUI_SCHEMA=/path/to/schema.toml cargo build
+// Override the source path with: SETTINGS_SCHEMA=/path/to/schema.toml cargo build
 const SCHEMA_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/schema.toml"));
 
 pub fn load() -> Result<Schema, toml::de::Error> {
@@ -118,7 +118,7 @@ pub struct Schema {
     #[serde(default)]
     pub lang: LangMode,
     /// Dot-separated path to the config key that stores the parent application's
-    /// language (e.g. `"display.language"`). When `lang = "os"`, ConfUI reads this
+    /// language (e.g. `"display.language"`). When `lang = "os"`, Settings reads this
     /// value from the config file and matches it, so the settings window follows
     /// the same language as the parent app. Falls back to native OS detection when
     /// the key is absent or unset.

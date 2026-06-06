@@ -46,9 +46,9 @@ fn main() {
     };
 
     eframe::run_native(
-        "confui",
+        "settings",
         options,
-        Box::new(|cc| Ok(Box::new(app::ConfUiApp::new(cc, schema, config)))),
+        Box::new(|cc| Ok(Box::new(app::SettingsApp::new(cc, schema, config)))),
     )
     .expect("eframe failed");
 }

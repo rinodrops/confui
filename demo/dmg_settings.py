@@ -1,7 +1,7 @@
 import os.path
 
 # Application bundle
-application = defines.get('app', 'dist/ConfUI.app')
+application = defines.get('app', 'dist/Settings.app')
 appname = os.path.basename(application)
 
 # Contents of the DMG
