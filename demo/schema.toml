@@ -1,5 +1,5 @@
 # test_schema.toml
-# ConfUI: Schema for comprehensive testing of all widgets.
+# Settings: Schema for comprehensive testing of all widgets.
 # This schema is designed to verify all widget types and their key options.
 #
 # Localization:
@@ -227,6 +227,17 @@ max       = 72
 step      = 0.5
 suffix    = " pt"
 max_width = 120
+
+[[tabs.fields]]
+widget = "separator"
+
+[[tabs.fields]]
+key       = "numeric.segment_count"
+label     = { en = "Segmented control (number)", ja = "セグメンテッド（数値）", de = "Segmentsteuerung (Zahl)" }
+type      = "number"
+widget    = "segmented_control"
+options   = ["0", "1", "2", "3", "4", "5"]
+max_width = 280
 
 # ── Tab 5: Misc ─────────────────────────────────────────────────────────────
 # hotkey

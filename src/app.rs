@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::mpsc;
 
-use crate::config::ConfigStore;
+use crate::config::{ConfigStore, NumberRepr};
 use crate::i18n::t;
-use crate::schema::{Field, SaveButtonMode, SectionMap, SectionTabStyle, Schema, ThemeMode as SchemaThemeMode, WidgetKind};
+use crate::schema::{Field, FieldType, SaveButtonMode, SectionMap, SectionTabStyle, Schema, ThemeMode as SchemaThemeMode, WidgetKind};
 use crate::theme::{self, Palette, Variant};
 
 /// Pending background file-picker: (config key path, result receiver).
@@ -92,7 +92,7 @@ const TEXTEDIT_MARGIN_Y: f32 = 4.0;
 // ---------------------------------------------------------------------------
 // App state
 
-pub struct ConfUiApp {
+pub struct SettingsApp {
     schema: Schema,
     config: ConfigStore,
     selected_tab: usize,
@@ -148,7 +148,7 @@ struct DeleteConfirm {
 
 // ---------------------------------------------------------------------------
 
-impl ConfUiApp {
+impl SettingsApp {
     pub fn new(cc: &eframe::CreationContext, schema: Schema, config: ConfigStore) -> Self {
         let light = Palette::from_schema(&schema, Variant::Light);
         let dark = Palette::from_schema(&schema, Variant::Dark);
@@ -243,7 +243,7 @@ pub fn compute_window_size(schema: &crate::schema::Schema) -> [f32; 2] {
 
 // ---------------------------------------------------------------------------
 
-impl eframe::App for ConfUiApp {
+impl eframe::App for SettingsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Resolve the active palette against the OS theme (it can change while
         // the app is running) and re-apply the theme every frame so eframe's
@@ -1228,7 +1228,7 @@ fn render_widget_inner(
 
 /// Returns `Some((key_path, rx))` when the user clicked the browse button and a
 /// background file-picker thread was spawned.  The caller should store this in
-/// `ConfUiApp::pending_file_pick`.
+/// `SettingsApp::pending_file_pick`.
 fn render_file_path(
     ui: &mut egui::Ui,
     field: &Field,
@@ -1757,6 +1757,56 @@ fn render_toggle(
 // ---------------------------------------------------------------------------
 // Helper: segmented_control
 
+fn segmented_control_options(field: &Field, config: &ConfigStore) -> Vec<String> {
+    if let Some(opts) = &field.options {
+        opts.clone()
+    } else if field.field_type != FieldType::Number {
+        field.options_from
+            .as_ref()
+            .map(|from| config.section_keys(from))
+            .unwrap_or_default()
+    } else {
+        vec![]
+    }
+}
+
+fn parse_numeric_segment_options(options: &[String]) -> Vec<(String, f64)> {
+    use std::sync::Once;
+
+    let mut parsed = Vec::with_capacity(options.len());
+    let mut invalid = Vec::new();
+    for opt in options {
+        match opt.parse::<f64>() {
+            Ok(v) => parsed.push((opt.clone(), v)),
+            Err(_) => invalid.push(opt.as_str()),
+        }
+    }
+    if !invalid.is_empty() {
+        static WARN: Once = Once::new();
+        WARN.call_once(|| {
+            eprintln!(
+                "segmented_control: skipping invalid numeric options: {invalid:?}"
+            );
+        });
+    }
+    parsed
+}
+
+fn numeric_segment_matches(current: f64, opt: f64) -> bool {
+    (current - opt).abs() < 1e-9
+}
+
+enum SegmentedWrite {
+    String,
+    Number { value: f64, repr: NumberRepr },
+}
+
+struct SegmentedSegments {
+    labels: Vec<String>,
+    selected: Vec<bool>,
+    on_select: Vec<SegmentedWrite>,
+}
+
 fn render_segmented_control(
     ui: &mut egui::Ui,
     field: &Field,
@@ -1764,44 +1814,110 @@ fn render_segmented_control(
     config: &mut ConfigStore,
     _accent: egui::Color32,
 ) {
-    let current = config.get_str(key_path).unwrap_or("").to_owned();
-    let options: Vec<String> = if let Some(opts) = &field.options {
-        opts.clone()
-    } else if let Some(from) = &field.options_from {
-        config.section_keys(from)
-    } else {
-        vec![]
-    };
+    let options = segmented_control_options(field, config);
     if options.is_empty() {
         return;
     }
 
-    let n      = options.len();
-    let seg_h  = 28.0_f32;
-    let inset  = 2.0_f32;
-    let r      = FIELD_ROUNDING;                          // u8
-    let pill_r = r.saturating_sub(inset as u8);           // u8
+    let segments = match field.field_type {
+        FieldType::Number => {
+            let parsed = parse_numeric_segment_options(&options);
+            if parsed.is_empty() {
+                return;
+            }
+            let repr = NumberRepr::from_options(&options);
+            let current = config.get_number(key_path).unwrap_or_else(|| {
+                field
+                    .min
+                    .or_else(|| parsed.first().map(|(_, v)| *v))
+                    .unwrap_or(0.0)
+            });
+            SegmentedSegments {
+                labels: parsed.iter().map(|(l, _)| l.clone()).collect(),
+                selected: parsed
+                    .iter()
+                    .map(|(_, v)| numeric_segment_matches(current, *v))
+                    .collect(),
+                on_select: parsed
+                    .iter()
+                    .map(|(_, v)| SegmentedWrite::Number { value: *v, repr })
+                    .collect(),
+            }
+        }
+        _ => {
+            let current = config.get_str(key_path).unwrap_or("");
+            SegmentedSegments {
+                labels: options.clone(),
+                selected: options.iter().map(|o| o == current).collect(),
+                on_select: options
+                    .iter()
+                    .map(|_| SegmentedWrite::String)
+                    .collect(),
+            }
+        }
+    };
 
-    // Apply optional width constraints; default is full available width.
-    let avail_w   = ui.available_width();
+    let n = segments.labels.len();
+    let seg_h = 28.0_f32;
+    let inset = 2.0_f32;
+    let r = FIELD_ROUNDING;
+    let pill_r = r.saturating_sub(inset as u8);
+    let avail_w = ui.available_width();
     let control_w = clamped_width(avail_w, field.min_width, field.max_width);
     let seg_w = control_w / n as f32;
-
     let (outer_rect, _) = ui.allocate_exact_size(
         egui::vec2(control_w, seg_h),
         egui::Sense::hover(),
     );
 
-    // iOS-style colors.
+    let mut changed_index = None;
+    paint_segmented_control_track(
+        ui,
+        outer_rect,
+        &segments.labels,
+        &segments.selected,
+        key_path,
+        seg_w,
+        seg_h,
+        inset,
+        r,
+        pill_r,
+        &mut changed_index,
+    );
+
+    if let Some(i) = changed_index {
+        match &segments.on_select[i] {
+            SegmentedWrite::String => {
+                config.set_str(key_path, &segments.labels[i]);
+            }
+            SegmentedWrite::Number { value, repr } => {
+                config.set_number(key_path, *value, *repr);
+            }
+        }
+    }
+}
+
+fn paint_segmented_control_track(
+    ui: &mut egui::Ui,
+    outer_rect: egui::Rect,
+    labels: &[String],
+    selected: &[bool],
+    key_path: &str,
+    seg_w: f32,
+    seg_h: f32,
+    inset: f32,
+    r: u8,
+    pill_r: u8,
+    changed_index: &mut Option<usize>,
+) -> Vec<(egui::Rect, bool, bool)> {
     let pal = theme::current();
     let track_fill = pal.control_track;
-    let sel_fill   = pal.surface;
+    let sel_fill = pal.surface;
     let sel_border = pal.control_track_border;
-    let shadow     = pal.shadow;
+    let shadow = pal.shadow;
 
-    // --- Interaction pass ---
+    let n = labels.len();
     let mut segs: Vec<(egui::Rect, bool, bool)> = Vec::with_capacity(n);
-    let mut changed_to: Option<String> = None;
 
     for i in 0..n {
         let seg_rect = egui::Rect::from_min_size(
@@ -1814,21 +1930,18 @@ fn render_segmented_control(
             egui::Sense::click(),
         );
         if resp.clicked() {
-            changed_to = Some(options[i].clone());
+            *changed_index = Some(i);
         }
-        segs.push((seg_rect, options[i] == current, resp.hovered()));
+        segs.push((seg_rect, selected[i], resp.hovered()));
     }
 
-    // --- Paint pass ---
     if ui.is_rect_visible(outer_rect) {
-        let painter  = ui.painter();
+        let painter = ui.painter();
         let track_cr = egui::CornerRadius::same(r);
-        let pill_cr  = egui::CornerRadius::same(pill_r);
+        let pill_cr = egui::CornerRadius::same(pill_r);
 
-        // 1. Gray track background.
         painter.rect_filled(outer_rect, track_cr, track_fill);
 
-        // 2. Selected segment: subtle drop-shadow + white pill + thin border.
         for (seg_rect, is_sel, _) in &segs {
             if *is_sel {
                 let pill = seg_rect.shrink(inset);
@@ -1843,21 +1956,18 @@ fn render_segmented_control(
             }
         }
 
-        // 3. Labels — same color for both states (iOS convention).
         for (i, (seg_rect, _, _)) in segs.iter().enumerate() {
             painter.text(
                 seg_rect.center(),
                 egui::Align2::CENTER_CENTER,
-                options[i].as_str(),
+                labels[i].as_str(),
                 egui::FontId::proportional(FIELD_FONT_PX),
                 ui.visuals().text_color(),
             );
         }
     }
 
-    if let Some(new_val) = changed_to {
-        config.set_str(key_path, &new_val);
-    }
+    segs
 }
 
 // ---------------------------------------------------------------------------
@@ -2132,7 +2242,7 @@ fn render_numeric(
     }
 
     if resp.changed() {
-        config.set_number(key_path, val);
+        config.set_number(key_path, val, NumberRepr::from_step(step));
     }
 }
 
