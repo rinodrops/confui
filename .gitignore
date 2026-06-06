@@ -1,5 +1,6 @@
 /target
 /dist
+/demo/dist
 /assets/icons.ttf
 /assets/icons.codepoints
 /assets/appicon.ico

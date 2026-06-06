@@ -37,10 +37,11 @@ exclusive_mode = "direct"
 # ── Numeric ──────────────────────────────────────────────────────────────────
 
 [numeric]
-slider_basic = 42.0
-slider_suffix = 200.0
-drag_basic = 25.0
+slider_basic = 42
+slider_suffix = 200
+drag_basic = 25
 drag_suffix = 14.0
+segment_count = 3
 
 # ── Miscellaneous ────────────────────────────────────────────────────────────────
 
