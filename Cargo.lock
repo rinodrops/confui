@@ -3028,6 +3028,7 @@ version = "0.2.0"
 dependencies = [
  "eframe",
  "egui",
+ "libc",
  "notify",
  "objc2 0.6.4",
  "objc2-foundation 0.3.2",

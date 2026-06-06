@@ -65,6 +65,10 @@ std::process::Command::new("path/to/settings").spawn()?;
 
 ## Embedding in Your App
 
+At most one Settings process may edit a given config file. Launching Settings again
+with the same config path is a no-op (the second instance exits immediately). Different
+config paths may each have their own window concurrently.
+
 ### macOS `.app` bundle
 
 ```

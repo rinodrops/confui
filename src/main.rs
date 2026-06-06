@@ -1,7 +1,10 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod app;
 mod config;
 mod i18n;
 mod schema;
+mod single_instance;
 mod theme;
 mod validation;
 
@@ -40,6 +43,10 @@ fn main() {
         .nth(1)
         .map(PathBuf::from)
         .unwrap_or_else(default_config_path);
+
+    if !single_instance::acquire(&config_path) {
+        return;
+    }
 
     let schema = schema::load().expect("Failed to parse schema.toml");
     let config = config::ConfigStore::load(&config_path)
