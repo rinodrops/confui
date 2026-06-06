@@ -1,7 +1,10 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod app;
 mod config;
 mod i18n;
 mod schema;
+mod single_instance;
 mod theme;
 
 use std::path::PathBuf;
@@ -14,6 +17,10 @@ fn main() {
             // Standalone dev fallback; pairs with the demo/schema.toml build.rs default.
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("demo/config.toml")
         });
+
+    if !single_instance::acquire(&config_path) {
+        return;
+    }
 
     let schema = schema::load().expect("Failed to parse schema.toml");
     let config = config::ConfigStore::load(&config_path)

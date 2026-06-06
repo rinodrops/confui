@@ -259,3 +259,45 @@ impl ConfigStore {
         removed
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn number_repr_from_step() {
+        assert_eq!(NumberRepr::from_step(1.0), NumberRepr::WholeAsInteger);
+        assert_eq!(NumberRepr::from_step(0.5), NumberRepr::AlwaysFloat);
+    }
+
+    #[test]
+    fn number_repr_from_options() {
+        assert_eq!(
+            NumberRepr::from_options(&["0".into(), "1".into(), "5".into()]),
+            NumberRepr::WholeAsInteger
+        );
+        assert_eq!(
+            NumberRepr::from_options(&["0.5".into(), "1.0".into()]),
+            NumberRepr::AlwaysFloat
+        );
+    }
+
+    #[test]
+    fn set_number_writes_integer_literal() {
+        let path = std::env::temp_dir().join(format!(
+            "settings_number_repr_test_{}.toml",
+            std::process::id()
+        ));
+        std::fs::write(&path, "[section]\n").unwrap();
+
+        let mut store = ConfigStore::load(&path).unwrap();
+        store.set_number("section.count", 3.0, NumberRepr::WholeAsInteger);
+        store.save().unwrap();
+
+        let saved = std::fs::read_to_string(&path).unwrap();
+        assert!(saved.contains("count = 3"));
+        assert!(!saved.contains("count = 3.0"));
+
+        let _ = std::fs::remove_file(path);
+    }
+}

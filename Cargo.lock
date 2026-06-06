@@ -2905,10 +2905,11 @@ dependencies = [
 
 [[package]]
 name = "settings"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "eframe",
  "egui",
+ "libc",
  "notify",
  "objc2 0.6.4",
  "objc2-foundation 0.3.2",

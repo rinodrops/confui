@@ -65,6 +65,10 @@ std::process::Command::new("path/to/settings").spawn()?;
 
 ## 親アプリへの組み込み
 
+同じ設定ファイルに対して同時に開ける Settings プロセスは 1 つまでです。同じ
+config パスで再度起動した場合は何もせず終了します。別の config パスなら同時に
+複数のウィンドウを開けます。
+
 ### macOS `.app` バンドル
 
 ```
