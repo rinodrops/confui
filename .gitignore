@@ -1,4 +1,5 @@
 /target
+settings-schema/target/
 /dist
 /demo/dist
 /assets/icons.ttf
