@@ -146,7 +146,7 @@ schema-check: check-schema
 ## macOS / Linux release binary (current arch, for bundling into parent app).
 binary: $(ICON_TTF)
 	@echo ">>> Building release binary  (schema: $(ABS_SCHEMA))"
-	SETTINGS_SCHEMA=$(ABS_SCHEMA) cargo build --release -p settings
+	SETTINGS_SCHEMA="$(ABS_SCHEMA)" cargo build --release -p settings
 	@echo ">>> Output: $(RELEASE_BIN)"
 
 # -----------------------------------------------------------------------
@@ -169,7 +169,7 @@ settings-x86_64: $(ICON_TTF)
 _mac_settings_app:
 	@test -n "$(PM_ARCH_SLUG)" && test -n "$(PM_RUST_TARGET)" && test -n "$(PM_SETTINGS_BIN)"
 	@echo ">>> Building Settings .app  (arch: $(PM_ARCH_SLUG), schema: $(ABS_SCHEMA))"
-	MACOSX_DEPLOYMENT_TARGET=$(MIN_MACOS) SETTINGS_SCHEMA=$(ABS_SCHEMA) \
+	MACOSX_DEPLOYMENT_TARGET=$(MIN_MACOS) SETTINGS_SCHEMA="$(ABS_SCHEMA)" \
 		cargo build --release -p settings --target $(PM_RUST_TARGET)
 	@mkdir -p "$(DIST_SETTINGS)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents/MacOS"
 	@mkdir -p "$(DIST_SETTINGS)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents/Resources"
@@ -182,7 +182,7 @@ _mac_settings_app:
 
 settings-win: $(ICON_TTF) $(APPICON_ICO)
 	@echo ">>> Building Settings .exe  (schema: $(ABS_SCHEMA))"
-	SETTINGS_SCHEMA=$(ABS_SCHEMA) CARGO_TARGET_DIR="$(WIN_TARGET_DIR)" \
+	SETTINGS_SCHEMA="$(ABS_SCHEMA)" CARGO_TARGET_DIR="$(WIN_TARGET_DIR)" \
 		cargo build --release -p settings --target $(WIN_TARGET)
 	@mkdir -p "$(DIST_SETTINGS)/$(ARCH_WIN)"
 	@cp "$(WIN_TARGET_DIR)/$(WIN_TARGET)/release/settings.exe" "$(WIN_EXE)"
@@ -190,7 +190,7 @@ settings-win: $(ICON_TTF) $(APPICON_ICO)
 
 settings-linux: $(ICON_TTF)
 	@echo ">>> Building Settings binary  (schema: $(ABS_SCHEMA))"
-	SETTINGS_SCHEMA=$(ABS_SCHEMA) cargo build --release -p settings
+	SETTINGS_SCHEMA="$(ABS_SCHEMA)" cargo build --release -p settings
 	@mkdir -p "$(DIST_SETTINGS)/$(ARCH_LINUX)"
 	@cp "$(RELEASE_BIN)" "$(LINUX_BIN)"
 	@echo ">>> Output: $(LINUX_BIN)"

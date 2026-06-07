@@ -103,7 +103,7 @@ demo-x86_64: $(ICON_TTF)
 _mac_demo_app:
 	@test -n "$(PM_ARCH_SLUG)" && test -n "$(PM_RUST_TARGET)" && test -n "$(PM_SETTINGS_BIN)"
 	@echo ">>> Building demo macOS .app  (arch: $(PM_ARCH_SLUG), schema: $(SCHEMA))"
-	MACOSX_DEPLOYMENT_TARGET=$(MIN_MACOS) SETTINGS_SCHEMA=$(SCHEMA) \
+	MACOSX_DEPLOYMENT_TARGET=$(MIN_MACOS) SETTINGS_SCHEMA="$(SCHEMA)" \
 		cargo build $(CARGO_MANIFEST) --release -p settings --target $(PM_RUST_TARGET)
 	@mkdir -p "$(DIST)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents/MacOS"
 	@mkdir -p "$(DIST)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents/Resources"
@@ -118,7 +118,7 @@ _mac_demo_app:
 
 demo-win: $(ICON_TTF) $(APPICON_ICO)
 	@echo ">>> Building demo Windows .exe  (schema: $(SCHEMA))"
-	SETTINGS_SCHEMA=$(SCHEMA) CARGO_TARGET_DIR="$(WIN_TARGET_DIR)" \
+	SETTINGS_SCHEMA="$(SCHEMA)" CARGO_TARGET_DIR="$(WIN_TARGET_DIR)" \
 		cargo build $(CARGO_MANIFEST) --release -p settings --target $(WIN_TARGET)
 	@mkdir -p "$(DIST)/$(ARCH_WIN)"
 	@cp "$(WIN_TARGET_DIR)/$(WIN_TARGET)/release/settings.exe" "$(WIN_EXE)"
@@ -127,7 +127,7 @@ demo-win: $(ICON_TTF) $(APPICON_ICO)
 
 demo-linux: $(ICON_TTF)
 	@echo ">>> Building demo Linux binary  (schema: $(SCHEMA))"
-	SETTINGS_SCHEMA=$(SCHEMA) cargo build $(CARGO_MANIFEST) --release -p settings
+	SETTINGS_SCHEMA="$(SCHEMA)" cargo build $(CARGO_MANIFEST) --release -p settings
 	@mkdir -p "$(DIST)/$(ARCH_LINUX)"
 	@cp ../target/release/$(EXE_NAME) "$(LINUX_BIN)"
 	@cp "$(CONFIG)" "$(DIST)/$(ARCH_LINUX)/config.toml"
