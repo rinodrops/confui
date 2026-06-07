@@ -38,8 +38,13 @@ WIN_TARGET        := x86_64-pc-windows-gnu
 WIN_TARGET_DIR    := /tmp/settings-win
 
 # Schema file to embed (production default: parent app's schema one level up).
+# $(abspath $(SCHEMA)) splits SCHEMA on whitespace; resolve via the shell instead.
 SCHEMA ?= ../schema.toml
-ABS_SCHEMA := $(abspath $(SCHEMA))
+ifneq ($(filter environment command line override,$(origin SETTINGS_SCHEMA)),)
+ABS_SCHEMA := $(SETTINGS_SCHEMA)
+else
+ABS_SCHEMA := $(shell realpath '$(SCHEMA)' 2>/dev/null || python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" '$(SCHEMA)')
+endif
 
 DIST_SETTINGS := dist/settings
 DIST_CHECKER  := dist/settings-schema-checker
@@ -82,7 +87,7 @@ ASSETS_DIR  := assets
 ICON_TTF    := $(ASSETS_DIR)/icons.ttf
 ICON_CP     := $(ASSETS_DIR)/icons.codepoints
 
-ICON_STYLE ?= $(or $(shell awk -F'"' '/^icon_style/{print $$2}' "$(SCHEMA)" 2>/dev/null | head -1),rounded)
+ICON_STYLE ?= $(or $(shell awk -F'"' '/^icon_style/{print $$2}' "$(ABS_SCHEMA)" 2>/dev/null | head -1),rounded)
 
 ifeq ($(ICON_STYLE),outlined)
   ICON_VARIANT := Outlined
