@@ -8,6 +8,11 @@ const SCHEMA_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/schema.tom
 
 pub fn load() -> Result<Schema, toml::de::Error> {
     let src = std::str::from_utf8(SCHEMA_BYTES).expect("schema.toml must be valid UTF-8");
+    parse(src)
+}
+
+/// Parse a schema from a TOML string (used by tests and the future schema-check tool).
+pub fn parse(src: &str) -> Result<Schema, toml::de::Error> {
     toml::from_str(src)
 }
 
@@ -25,7 +30,7 @@ pub fn load() -> Result<Schema, toml::de::Error> {
 /// The active UI language is resolved once at startup in [`crate::i18n`]; this
 /// type queries it at render time via [`LocalizedString::get`], so the same
 /// schema serves every supported language without duplicating the structure.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalizedString {
     /// Value returned when the active language has no dedicated entry. Equals the
     /// bare string when the field was authored without a per-language table.
@@ -97,10 +102,159 @@ pub enum SaveButtonMode {
 }
 
 // ---------------------------------------------------------------------------
+// Validation (CEL)
+
+/// A named CEL constraint (`[[constraints]]` in the schema).
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct Constraint {
+    /// Stable identifier unique within the schema.
+    pub id: String,
+    /// CEL expression; must evaluate to `bool`.
+    pub expr: String,
+    /// Shown below the field when referenced from [`Field::validate`] and the
+    /// expression is false. Not required for [`OptionState::when`] usage.
+    #[serde(default)]
+    pub message: Option<LocalizedString>,
+}
+
+/// One entry in a field's `validate` list — a [`Constraint`] id or an inline rule.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ValidateEntry {
+    /// Reference to a top-level [`Constraint`] by `id`.
+    Ref(String),
+    /// Inline CEL rule with a mandatory localized message.
+    Inline(InlineValidate),
+}
+
+/// Inline field validation rule (CEL + message).
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct InlineValidate {
+    pub expr: String,
+    pub message: LocalizedString,
+}
+
+/// Per-option enablement for `segmented_control` and `select`.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct OptionState {
+    /// Option value as written in `options` (always a string).
+    pub value: String,
+    /// Constraint id: enabled iff the constraint's `expr` is true when this
+    /// field is hypothetically set to `value`.
+    #[serde(default)]
+    pub when: Option<String>,
+    /// Explicit CEL expression: enabled when this evaluates to `true`.
+    #[serde(default)]
+    pub enabled: Option<String>,
+}
+
+/// Resolved validation rule with expression and message materialized.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedValidateRule {
+    Named {
+        id: String,
+        expr: String,
+        message: LocalizedString,
+    },
+    Inline(InlineValidate),
+}
+
+/// Semantic schema error (English messages for schema authors).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SchemaValidationError {
+    DuplicateConstraintId { id: String },
+    UnknownConstraintRef { id: String, location: String },
+    MissingConstraintMessage { id: String, location: String },
+    OptionStatesUnsupportedWidget { location: String, widget: String },
+    OptionStateConflict { location: String, value: String },
+    OptionStateMissingRule { location: String, value: String },
+    DuplicateOptionStateValue { location: String, value: String },
+    UnknownOptionValue { location: String, value: String },
+}
+
+impl std::fmt::Display for SchemaValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DuplicateConstraintId { id } => {
+                write!(f, "duplicate constraint id {id:?}")
+            }
+            Self::UnknownConstraintRef { id, location } => {
+                write!(
+                    f,
+                    "unknown constraint id {id:?} referenced at {location}"
+                )
+            }
+            Self::MissingConstraintMessage { id, location } => {
+                write!(
+                    f,
+                    "constraint {id:?} is referenced from {location} but has no message; \
+                     add a `message` to [[constraints]] or use an inline [[validate]] rule"
+                )
+            }
+            Self::OptionStatesUnsupportedWidget { location, widget } => {
+                write!(
+                    f,
+                    "option_states is only allowed on segmented_control and select \
+                     (found widget={widget:?} at {location})"
+                )
+            }
+            Self::OptionStateConflict { location, value } => {
+                write!(
+                    f,
+                    "option_states entry for value {value:?} at {location} must set \
+                     either `when` or `enabled`, not both"
+                )
+            }
+            Self::OptionStateMissingRule { location, value } => {
+                write!(
+                    f,
+                    "option_states entry for value {value:?} at {location} must set \
+                     `when` or `enabled`"
+                )
+            }
+            Self::DuplicateOptionStateValue { location, value } => {
+                write!(
+                    f,
+                    "duplicate option_states value {value:?} at {location}"
+                )
+            }
+            Self::UnknownOptionValue { location, value } => {
+                write!(
+                    f,
+                    "option_states value {value:?} at {location} is not listed in `options`"
+                )
+            }
+        }
+    }
+}
+
+fn deserialize_validate_entries<'de, D>(d: D) -> Result<Vec<ValidateEntry>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // `Many` must be listed before `One`: otherwise a heterogeneous TOML array
+    // can be mis-read as a single inline table.
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Raw {
+        Many(Vec<ValidateEntry>),
+        One(ValidateEntry),
+    }
+
+    Ok(match Raw::deserialize(d)? {
+        Raw::Many(entries) => entries,
+        Raw::One(entry) => vec![entry],
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Top-level
 
 #[derive(Debug, Deserialize)]
 pub struct Schema {
+    /// Reusable named CEL constraints (`[[constraints]]` in TOML).
+    #[serde(default)]
+    pub constraints: Vec<Constraint>,
     pub tabs: Vec<Tab>,
     /// Icon variant to use for Material Symbols ("rounded" | "outlined" | "sharp").
     /// Only informational for the schema consumer; the actual font is selected at
@@ -148,6 +302,240 @@ pub struct Schema {
     /// and bottom button bar). Defaults to 370 when omitted.
     #[serde(default)]
     pub content_height: Option<f32>,
+}
+
+impl Schema {
+    /// Validate cross-references and field/rule consistency.
+    ///
+    /// Returns all errors at once so schema authors can fix them in one pass.
+    pub fn validate(&self) -> Result<(), Vec<SchemaValidationError>> {
+        let mut errors = Vec::new();
+        let mut seen_ids = BTreeMap::<&str, usize>::new();
+
+        for (index, constraint) in self.constraints.iter().enumerate() {
+            if seen_ids.insert(constraint.id.as_str(), index).is_some() {
+                errors.push(SchemaValidationError::DuplicateConstraintId {
+                    id: constraint.id.clone(),
+                });
+            }
+        }
+
+        let constraint_ids: BTreeMap<&str, &Constraint> = self
+            .constraints
+            .iter()
+            .map(|c| (c.id.as_str(), c))
+            .collect();
+
+        for (tab_index, tab) in self.tabs.iter().enumerate() {
+            if let Some(fields) = &tab.fields {
+                for (field_index, field) in fields.iter().enumerate() {
+                    validate_field(
+                        &mut errors,
+                        &constraint_ids,
+                        FieldContext {
+                            tab_index,
+                            tab_id: &tab.id,
+                            field_index,
+                            field,
+                            section_prefix: None,
+                        },
+                    );
+                }
+            }
+            if let Some(section_map) = &tab.section_map {
+                for (field_index, field) in section_map.fields.iter().enumerate() {
+                    validate_field(
+                        &mut errors,
+                        &constraint_ids,
+                        FieldContext {
+                            tab_index,
+                            tab_id: &tab.id,
+                            field_index,
+                            field,
+                            section_prefix: Some(section_map.key_prefix.as_str()),
+                        },
+                    );
+                }
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+struct FieldContext<'a> {
+    tab_index: usize,
+    tab_id: &'a str,
+    field_index: usize,
+    field: &'a Field,
+    section_prefix: Option<&'a str>,
+}
+
+impl FieldContext<'_> {
+    fn location(&self) -> String {
+        match self.section_prefix {
+            Some(prefix) => format!(
+                "tabs[{}].id={:?}.section_map.key_prefix={:?}.fields[{}] key={:?}",
+                self.tab_index, self.tab_id, prefix, self.field_index, self.field.key
+            ),
+            None => format!(
+                "tabs[{}].id={:?}.fields[{}] key={:?}",
+                self.tab_index, self.tab_id, self.field_index, self.field.key
+            ),
+        }
+    }
+}
+
+fn validate_field(
+    errors: &mut Vec<SchemaValidationError>,
+    constraints: &BTreeMap<&str, &Constraint>,
+    ctx: FieldContext<'_>,
+) {
+    let location = ctx.location();
+    let field = ctx.field;
+
+    for entry in &field.validate {
+        if let ValidateEntry::Ref(id) = entry {
+            match constraints.get(id.as_str()) {
+                None => errors.push(SchemaValidationError::UnknownConstraintRef {
+                    id: id.clone(),
+                    location: location.clone(),
+                }),
+                Some(constraint) if constraint.message.is_none() => {
+                    errors.push(SchemaValidationError::MissingConstraintMessage {
+                        id: id.clone(),
+                        location: location.clone(),
+                    });
+                }
+                Some(_) => {}
+            }
+        }
+    }
+
+    if field.option_states.is_empty() {
+        return;
+    }
+
+    if !field.widget.supports_option_states() {
+        errors.push(SchemaValidationError::OptionStatesUnsupportedWidget {
+            location,
+            widget: widget_kind_name(&field.widget).to_owned(),
+        });
+        return;
+    }
+
+    let mut seen_values = BTreeMap::<&str, ()>::new();
+    for state in &field.option_states {
+        let has_when = state.when.is_some();
+        let has_enabled = state.enabled.is_some();
+        if has_when && has_enabled {
+            errors.push(SchemaValidationError::OptionStateConflict {
+                location: location.clone(),
+                value: state.value.clone(),
+            });
+        } else if !has_when && !has_enabled {
+            errors.push(SchemaValidationError::OptionStateMissingRule {
+                location: location.clone(),
+                value: state.value.clone(),
+            });
+        }
+
+        if state.when.as_ref().is_some_and(|id| !constraints.contains_key(id.as_str())) {
+            errors.push(SchemaValidationError::UnknownConstraintRef {
+                id: state.when.clone().unwrap(),
+                location: location.clone(),
+            });
+        }
+
+        if seen_values.insert(state.value.as_str(), ()).is_some() {
+            errors.push(SchemaValidationError::DuplicateOptionStateValue {
+                location: location.clone(),
+                value: state.value.clone(),
+            });
+        }
+
+        if let Some(options) = &field.options {
+            if !options.iter().any(|o| o == &state.value) {
+                errors.push(SchemaValidationError::UnknownOptionValue {
+                    location: location.clone(),
+                    value: state.value.clone(),
+                });
+            }
+        }
+    }
+}
+
+fn widget_kind_name(widget: &WidgetKind) -> &'static str {
+    match widget {
+        WidgetKind::TextInput => "text_input",
+        WidgetKind::SecretInput => "secret_input",
+        WidgetKind::Multiline => "multiline",
+        WidgetKind::Checkbox => "checkbox",
+        WidgetKind::Toggle => "toggle",
+        WidgetKind::Select => "select",
+        WidgetKind::SegmentedControl => "segmented_control",
+        WidgetKind::ExclusiveRadio => "exclusive_radio",
+        WidgetKind::Hotkey => "hotkey",
+        WidgetKind::Slider => "slider",
+        WidgetKind::DragValue => "drag_value",
+        WidgetKind::Separator => "separator",
+        WidgetKind::FilePath => "file_path",
+        WidgetKind::ColorPicker => "color_picker",
+        WidgetKind::KeyValueMap => "key_value_map",
+    }
+}
+
+impl WidgetKind {
+    fn supports_option_states(&self) -> bool {
+        matches!(self, WidgetKind::SegmentedControl | WidgetKind::Select)
+    }
+}
+
+impl Field {
+    /// Expand `validate` entries against top-level [`Constraint`]s, preserving order.
+    pub fn resolved_validate_rules(
+        &self,
+        schema: &Schema,
+    ) -> Result<Vec<ResolvedValidateRule>, SchemaValidationError> {
+        let constraints: BTreeMap<&str, &Constraint> = schema
+            .constraints
+            .iter()
+            .map(|c| (c.id.as_str(), c))
+            .collect();
+
+        let mut rules = Vec::with_capacity(self.validate.len());
+        for entry in &self.validate {
+            match entry {
+                ValidateEntry::Ref(id) => {
+                    let constraint = constraints.get(id.as_str()).ok_or_else(|| {
+                        SchemaValidationError::UnknownConstraintRef {
+                            id: id.clone(),
+                            location: format!("field key={:?}", self.key),
+                        }
+                    })?;
+                    let message = constraint.message.clone().ok_or_else(|| {
+                        SchemaValidationError::MissingConstraintMessage {
+                            id: id.clone(),
+                            location: format!("field key={:?}", self.key),
+                        }
+                    })?;
+                    rules.push(ResolvedValidateRule::Named {
+                        id: id.clone(),
+                        expr: constraint.expr.clone(),
+                        message,
+                    });
+                }
+                ValidateEntry::Inline(inline) => {
+                    rules.push(ResolvedValidateRule::Inline(inline.clone()));
+                }
+            }
+        }
+        Ok(rules)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -350,6 +738,14 @@ pub struct Field {
     /// Present only when `widget = "exclusive_radio"`.
     pub exclusive: Option<ExclusiveConfig>,
 
+    /// Field validation rules (CEL). Evaluation order follows declaration order.
+    #[serde(default, deserialize_with = "deserialize_validate_entries")]
+    pub validate: Vec<ValidateEntry>,
+
+    /// Per-option enablement for `segmented_control` and `select`.
+    #[serde(default)]
+    pub option_states: Vec<OptionState>,
+
     // --- file_path ---
     /// If `true`, the file dialog picks a directory instead of a file.
     #[serde(default)]
@@ -439,3 +835,368 @@ pub const ICON_FONT: &[u8] =
 #[cfg(has_icons)]
 pub const ICON_CODEPOINTS: &str =
     include_str!(concat!(env!("OUT_DIR"), "/icons.codepoints"));
+
+// ---------------------------------------------------------------------------
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_and_validate(src: &str) -> Result<Schema, Vec<SchemaValidationError>> {
+        let schema = parse(src).expect("TOML parse");
+        schema.validate().map(|()| schema).map_err(|e| e)
+    }
+
+    #[test]
+    fn parse_validate_single_ref() {
+        let src = r#"
+[[constraints]]
+id = "non_empty"
+expr = "x.size() > 0"
+message = "Required"
+
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "x"
+label = "X"
+widget = "text_input"
+validate = "non_empty"
+"#;
+        let schema = parse(src).unwrap();
+        assert_eq!(schema.constraints.len(), 1);
+        assert_eq!(schema.tabs[0].fields.as_ref().unwrap()[0].validate.len(), 1);
+        assert!(matches!(
+            schema.tabs[0].fields.as_ref().unwrap()[0].validate[0],
+            ValidateEntry::Ref(ref id) if id == "non_empty"
+        ));
+        schema.validate().unwrap();
+    }
+
+    #[test]
+    fn parse_validate_inline_array() {
+        let src = r#"
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "email"
+label = "Email"
+widget = "text_input"
+validate = [
+  "fmt",
+  { expr = "email.size() > 0", message = "Required" },
+]
+[[constraints]]
+id = "fmt"
+expr = "true"
+message = "bad format"
+"#;
+        let schema = parse(src).unwrap();
+        let field = &schema.tabs[0].fields.as_ref().unwrap()[0];
+        assert_eq!(
+            field.validate.len(),
+            2,
+            "validate entries: {:?}",
+            field.validate
+        );
+        schema.validate().unwrap();
+        let rules = field.resolved_validate_rules(&schema).unwrap();
+        assert_eq!(rules.len(), 2);
+    }
+
+    #[test]
+    fn parse_validate_subtable_form() {
+        let src = r#"
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "name"
+label = "Name"
+widget = "text_input"
+
+[[tabs.fields.validate]]
+expr = "name.size() > 0"
+message = "Required"
+"#;
+        let schema = parse(src).unwrap();
+        assert!(matches!(
+            schema.tabs[0].fields.as_ref().unwrap()[0].validate[0],
+            ValidateEntry::Inline(_)
+        ));
+        schema.validate().unwrap();
+    }
+
+    #[test]
+    fn parse_option_states_when() {
+        let src = r#"
+[[constraints]]
+id = "min_one"
+expr = "a + b >= 1"
+
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "a"
+label = "A"
+type = "number"
+widget = "segmented_control"
+options = ["0", "1"]
+
+[[tabs.fields.option_states]]
+value = "0"
+when = "min_one"
+
+[[tabs.fields]]
+key = "b"
+label = "B"
+type = "number"
+widget = "segmented_control"
+options = ["0", "1"]
+
+[[tabs.fields.option_states]]
+value = "0"
+when = "min_one"
+"#;
+        parse_and_validate(src).unwrap();
+    }
+
+    #[test]
+    fn error_duplicate_constraint_id() {
+        let src = r#"
+[[constraints]]
+id = "dup"
+expr = "true"
+message = "a"
+
+[[constraints]]
+id = "dup"
+expr = "false"
+message = "b"
+
+[[tabs]]
+id = "main"
+label = "Main"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| matches!(e, SchemaValidationError::DuplicateConstraintId { id } if id == "dup")));
+    }
+
+    #[test]
+    fn error_unknown_validate_ref() {
+        let src = r#"
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "x"
+label = "X"
+widget = "text_input"
+validate = "missing"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            SchemaValidationError::UnknownConstraintRef { id, .. } if id == "missing"
+        )));
+    }
+
+    #[test]
+    fn error_missing_constraint_message() {
+        let src = r#"
+[[constraints]]
+id = "no_msg"
+expr = "true"
+
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "x"
+label = "X"
+widget = "text_input"
+validate = "no_msg"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            SchemaValidationError::MissingConstraintMessage { id, .. } if id == "no_msg"
+        )));
+    }
+
+    #[test]
+    fn error_option_states_on_text_input() {
+        let src = r#"
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "host"
+label = "Host"
+widget = "text_input"
+
+[[tabs.fields.option_states]]
+value = "0"
+when = "x"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            SchemaValidationError::OptionStatesUnsupportedWidget { widget, .. } if widget == "text_input"
+        )));
+    }
+
+    #[test]
+    fn error_option_state_conflict() {
+        let src = r#"
+[[constraints]]
+id = "c"
+expr = "true"
+
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "mode"
+label = "Mode"
+widget = "select"
+options = ["a", "b"]
+
+[[tabs.fields.option_states]]
+value = "a"
+when = "c"
+enabled = "true"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            SchemaValidationError::OptionStateConflict { value, .. } if value == "a"
+        )));
+    }
+
+    #[test]
+    fn error_option_state_missing_rule() {
+        let src = r#"
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "mode"
+label = "Mode"
+widget = "select"
+options = ["a"]
+
+[[tabs.fields.option_states]]
+value = "a"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            SchemaValidationError::OptionStateMissingRule { value, .. } if value == "a"
+        )));
+    }
+
+    #[test]
+    fn error_duplicate_option_state_value() {
+        let src = r#"
+[[constraints]]
+id = "c"
+expr = "true"
+
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "n"
+label = "N"
+widget = "segmented_control"
+options = ["0", "1"]
+
+[[tabs.fields.option_states]]
+value = "0"
+when = "c"
+
+[[tabs.fields.option_states]]
+value = "0"
+enabled = "true"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            SchemaValidationError::DuplicateOptionStateValue { value, .. } if value == "0"
+        )));
+    }
+
+    #[test]
+    fn error_unknown_option_value() {
+        let src = r#"
+[[constraints]]
+id = "c"
+expr = "true"
+
+[[tabs]]
+id = "main"
+label = "Main"
+
+[[tabs.fields]]
+key = "n"
+label = "N"
+widget = "segmented_control"
+options = ["1", "2"]
+
+[[tabs.fields.option_states]]
+value = "0"
+when = "c"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            SchemaValidationError::UnknownOptionValue { value, .. } if value == "0"
+        )));
+    }
+
+    #[test]
+    fn validate_section_map_field() {
+        let src = r#"
+[[constraints]]
+id = "c"
+expr = "true"
+message = "nope"
+
+[[tabs]]
+id = "main"
+label = "Main"
+
+[tabs.section_map]
+key_prefix = "profiles"
+allow_add_remove = false
+
+[[tabs.section_map.fields]]
+key = "name"
+label = "Name"
+widget = "text_input"
+validate = "c"
+"#;
+        parse_and_validate(src).unwrap();
+    }
+
+    #[test]
+    fn embedded_demo_schema_parses_and_validates() {
+        let schema = load().expect("embedded schema");
+        schema.validate().expect("demo schema should be valid");
+    }
+}
