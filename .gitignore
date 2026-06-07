@@ -1,6 +1,7 @@
-/target
-/dist
-/demo/dist
+target/
+dist/
+settings-schema/Cargo.lock
+
 /assets/icons.ttf
 /assets/icons.codepoints
 /assets/appicon.ico

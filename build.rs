@@ -14,6 +14,10 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|_| manifest_dir.join("demo/schema.toml"));
 
+    settings_schema::check_schema_file(&schema_src).unwrap_or_else(|msg| {
+        panic!("{msg}");
+    });
+
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let schema_dest = out_dir.join("schema.toml");
 

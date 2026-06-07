@@ -6,17 +6,43 @@ mod i18n;
 mod schema;
 mod single_instance;
 mod theme;
+mod validation;
 
 use std::path::PathBuf;
+
+/// Default config path when no CLI argument is given.
+///
+/// Packaged builds: beside the executable (Windows/Linux) or inside the
+/// `.app` bundle's `Resources/` (macOS). Development: `demo/config.toml`.
+fn default_config_path() -> PathBuf {
+    if let Some(bundled) = bundled_config_path() {
+        return bundled;
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("demo/config.toml")
+}
+
+#[cfg(target_os = "macos")]
+fn bundled_config_path() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let macos_dir = exe.parent()?;
+    if macos_dir.file_name().is_some_and(|n| n == "MacOS") {
+        return Some(macos_dir.parent()?.join("Resources/config.toml"));
+    }
+    None
+}
+
+#[cfg(not(target_os = "macos"))]
+fn bundled_config_path() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let path = exe.parent()?.join("config.toml");
+    path.exists().then_some(path)
+}
 
 fn main() {
     let config_path = std::env::args()
         .nth(1)
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            // Standalone dev fallback; pairs with the demo/schema.toml build.rs default.
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("demo/config.toml")
-        });
+        .unwrap_or_else(default_config_path);
 
     if !single_instance::acquire(&config_path) {
         return;

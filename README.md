@@ -113,29 +113,43 @@ cd settings
 make icons                          # Download Material Symbols (rounded)
 make icons ICON_STYLE=outlined      # Variants: rounded / outlined / sharp
 
-# macOS / Linux binary
-make                                # Release binary
-make SCHEMA=/path/to/schema.toml    # Override schema path
+# Parent-app binary (current arch)
+make binary
+make SCHEMA=/path/to/schema.toml binary
 
-# Windows .exe (cross-compile from macOS; requires mingw-w64 + x86_64-pc-windows-gnu)
-make win
-make win-zip                        # Zip for distribution
+# Schema validation only (no GUI build)
+make check-schema
+
+# Standalone distribution (production schema)
+make settings-arm64                 # macOS .app → dist/settings/darwin-arm64/
+make settings-win                   # Windows .exe → dist/settings/windows-x86_64/
+make settings-linux                 # Linux binary → dist/settings/linux-x86_64/
+
+# Schema checker CLI (no embedded schema)
+make settings-schema-checker-arm64  # → dist/settings-schema-checker/darwin-arm64/
+
+# Demo GUI (demo/schema.toml); see demo/Makefile
+cd demo && make demo-arm64
 
 make clean
 ```
 
 Output:
 
-| Path                             | Description                               |
-| -------------------------------- | ----------------------------------------- |
-| `target/release/settings`            | Binary for embedding in a macOS/Linux app |
-| `dist/settings-windows/Settings.exe` | Windows executable                        |
+| Path | Description |
+| ---- | ----------- |
+| `target/release/settings` | Binary for embedding in a parent macOS/Linux app |
+| `dist/settings/<arch>/` | Standalone production GUI (`darwin-arm64`, `windows-x86_64`, …) |
+| `dist/settings-schema-checker/<arch>/` | `settings-schema-checker` CLI for schema authors |
+| `demo/dist/<arch>/` | Standalone demo GUI with bundled `config.toml` |
+
+ARCH slugs: `darwin-arm64`, `darwin-x86_64`, `windows-x86_64`, `linux-x86_64`.
 
 ## Documentation
 
 Full schema reference, widget guide, theming, and localization:
 
-**https://emotiongraphics.jp/docs/settings/**
+**https://emotiongraphics.jp/docs/ref/settings/**
 
 ### `segmented_control` and `type`
 
