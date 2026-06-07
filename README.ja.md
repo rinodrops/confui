@@ -109,23 +109,37 @@ cd settings
 make icons                          # Material Symbols をダウンロード（rounded）
 make icons ICON_STYLE=outlined      # バリアント: rounded / outlined / sharp
 
-# macOS / Linux バイナリ
-make                                # リリースバイナリ
-make SCHEMA=/path/to/schema.toml    # スキーマパスを上書き
+# 親アプリ同梱用バイナリ（現在のアーキテクチャ）
+make binary
+make SCHEMA=/path/to/schema.toml binary
 
-# Windows .exe（macOS ホストからクロスコンパイル。mingw-w64 + x86_64-pc-windows-gnu が必要）
-make win
-make win-zip                        # 配布用 zip 化
+# スキーマ検証のみ（GUI はビルドしない）
+make check-schema
+
+# スタンドアロン配布物（本番スキーマ）
+make settings-arm64                 # macOS .app → dist/settings/darwin-arm64/
+make settings-win                   # Windows .exe → dist/settings/windows-x86_64/
+make settings-linux                 # Linux バイナリ → dist/settings/linux-x86_64/
+
+# スキーマ検証 CLI（スキーマは埋め込まない）
+make settings-schema-checker-arm64  # → dist/settings-schema-checker/darwin-arm64/
+
+# デモ GUI（demo/schema.toml）— demo/Makefile を参照
+cd demo && make demo-arm64
 
 make clean
 ```
 
 出力先：
 
-| パス                             | 説明                                           |
-| -------------------------------- | ---------------------------------------------- |
-| `target/release/settings`            | macOS / Linux アプリに同梱するための生バイナリ |
-| `dist/settings-windows/Settings.exe` | Windows 実行ファイル                           |
+| パス | 説明 |
+| ---- | ---- |
+| `target/release/settings` | 親 macOS / Linux アプリに同梱する生バイナリ |
+| `dist/settings/<arch>/` | 本番スキーマのスタンドアロン GUI（`darwin-arm64`, `windows-x86_64` 等） |
+| `dist/settings-schema-checker/<arch>/` | スキーマ作者向け `settings-schema-checker` CLI |
+| `demo/dist/<arch>/` | `config.toml` 同梱のデモ GUI |
+
+ARCH slug: `darwin-arm64`, `darwin-x86_64`, `windows-x86_64`, `linux-x86_64`。
 
 ## ドキュメント
 

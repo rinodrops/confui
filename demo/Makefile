@@ -1,31 +1,20 @@
 # ============================================================
 # Settings — demo build targets
 # ============================================================
-# Generates standalone demo binaries for all platforms, embedding
-# ../../schema.toml (the project's test schema) as the schema.
+# Standalone demo GUI (demo/schema.toml embedded). No checker.
 #
 # Usage:
-#   make               — macOS .app bundle (universal binary)
-#   make win           — Windows .exe (cross-compiled from macOS)
-#   make linux         — Linux binary (run natively on a Linux host)
-#   make win-zip       — zip the Windows .exe
-#   make mac-zip       — zip the macOS .app
-#   make mac-dmg       — create a distributable DMG
-#   make sign          — code-sign the .app bundle
-#   make notarize      — sign, create DMG, notarize, and staple
+#   make demo-arm64      — macOS .app → dist/darwin-arm64/
+#   make demo-x86_64     — macOS .app (Intel)
+#   make demo-win        — Windows .exe + config.toml
+#   make demo-linux      — Linux binary + config.toml
+#   make demo-dmg-arm64  — distributable DMG
 #
 # Prerequisites:
-#   macOS universal:  rustup target add aarch64-apple-darwin x86_64-apple-darwin
-#   Windows cross:    brew install mingw-w64
-#                     rustup target add x86_64-pc-windows-gnu
-#   ICO generation:   brew install imagemagick
-#   DMG:              pipx install dmgbuild
-#
-# Environment variables required for signing / notarization:
-#   APPLE_DEVELOPER_CERTIFICATE_NAME   — e.g. "Developer ID Application: ..."
-#   APPLE_DEVELOPER_TEAM_ID            — 10-char team ID
-#   APPLE_ID                           — Apple ID email
-#   APPLE_DEVELOPER_APP_PASSWORD       — app-specific password
+#   macOS:  rustup target add aarch64-apple-darwin x86_64-apple-darwin
+#   Windows cross: brew install mingw-w64; rustup target add x86_64-pc-windows-gnu
+#   ICO:    brew install imagemagick
+#   DMG:    pipx install dmgbuild
 # ============================================================
 
 empty     :=
@@ -37,93 +26,210 @@ BUNDLE_ID := jp.emotiongraphics.settings
 VERSION   := $(shell awk -F'"' '/^version *=/{print $$2; exit}' ../Cargo.toml)
 MIN_MACOS := 11.0
 
-# Schema: the demo test schema, co-located with this Makefile in demo/.
-SCHEMA := $(abspath schema.toml)
+ARCH_DARWIN_ARM64 := darwin-arm64
+ARCH_DARWIN_X86   := darwin-x86_64
+ARCH_WIN          := windows-x86_64
+ARCH_LINUX        := linux-x86_64
 
-# Cargo invocation referencing the parent settings package.
+RUST_TARGET_ARM64 := aarch64-apple-darwin
+RUST_TARGET_X86   := x86_64-apple-darwin
+WIN_TARGET        := x86_64-pc-windows-gnu
+WIN_TARGET_DIR    := /tmp/settings-demo-win
+
+SCHEMA := $(abspath schema.toml)
+CONFIG := $(abspath config.toml)
 CARGO_MANIFEST := --manifest-path ../Cargo.toml
 
-DIST      := dist
-BUNDLE    := $(DIST)/$(APP_NAME).app
-CONTENTS  := $(BUNDLE)/Contents
-MACOS_DIR := $(CONTENTS)/MacOS
-RES_DIR   := $(CONTENTS)/Resources
+DIST := dist
 
-# Make-target–safe versions: spaces escaped as '\ ' for use in
-# prerequisite lists and target definitions.
-BUNDLE_T    := $(subst $(space),\ ,$(BUNDLE))
-CONTENTS_T  := $(subst $(space),\ ,$(CONTENTS))
-MACOS_DIR_T := $(subst $(space),\ ,$(MACOS_DIR))
-RES_DIR_T   := $(subst $(space),\ ,$(RES_DIR))
+APP_ARM64 := $(DIST)/$(ARCH_DARWIN_ARM64)/$(APP_NAME).app
+APP_X86   := $(DIST)/$(ARCH_DARWIN_X86)/$(APP_NAME).app
 
+APP_ZIP_ARM64 := $(DIST)/$(APP_NAME)-v$(VERSION)-darwin-arm64.zip
+APP_ZIP_X86   := $(DIST)/$(APP_NAME)-v$(VERSION)-darwin-x86_64.zip
+APP_DMG_ARM64 := $(DIST)/$(APP_NAME)-v$(VERSION)-darwin-arm64.dmg
+APP_DMG_X86   := $(DIST)/$(APP_NAME)-v$(VERSION)-darwin-x86_64.dmg
+
+WIN_EXE   := $(DIST)/$(ARCH_WIN)/$(APP_NAME).exe
+WIN_ZIP   := $(DIST)/$(APP_NAME)-v$(VERSION)-windows-x86_64.zip
+LINUX_BIN := $(DIST)/$(ARCH_LINUX)/$(EXE_NAME)
+
+DMG_SETTINGS := dmg_settings.py
 ICON_SRC_MACOS := assets/appicon-macos.png
 ICONSET        := $(DIST)/AppIcon.iconset
-ICNS           := $(RES_DIR)/AppIcon.icns
 
 CERT      := $(APPLE_DEVELOPER_CERTIFICATE_NAME)
 TEAM_ID   := $(APPLE_DEVELOPER_TEAM_ID)
 APPLE_ID_ := $(APPLE_ID)
 APP_PASS  := $(APPLE_DEVELOPER_APP_PASSWORD)
 
-APP_ZIP      := $(DIST)/$(APP_NAME)-v$(VERSION)-darwin-universal.zip
-APP_DMG      := $(DIST)/$(APP_NAME)-v$(VERSION)-darwin-universal.dmg
-DMG_SETTINGS := dmg_settings.py
-
-WIN_TARGET     := x86_64-pc-windows-gnu
-WIN_TARGET_DIR := /tmp/settings-demo-win
-WIN_DIR        := $(DIST)/settings-windows
-WIN_EXE        := $(WIN_DIR)/$(APP_NAME).exe
-WIN_ZIP        := $(DIST)/$(APP_NAME)-v$(VERSION)-windows-x86_64.zip
-
-LINUX_BIN := $(DIST)/$(EXE_NAME)
-
-# Icon font — delegate to parent Makefile if not yet downloaded.
-ICON_TTF := ../assets/icons.ttf
-
-# Windows .ico — delegate to parent Makefile if not yet generated.
+ICON_TTF    := ../assets/icons.ttf
 APPICON_ICO := ../assets/appicon.ico
 
-# ── targets ─────────────────────────────────────────────────
+.PHONY: all demo-arm64 demo-x86_64 demo-win demo-linux \
+	demo-zip-arm64 demo-zip-x86_64 demo-zip-win \
+	demo-dmg-arm64 demo-dmg-x86_64 sign-arm64 sign-x86_64 \
+	notarize-arm64 notarize-x86_64 clean help \
+	_mac_demo_app _plist _icns_if_present _icns_build \
+	mac win linux win-zip mac-zip mac-dmg sign notarize
 
-.PHONY: all mac win linux win-zip mac-zip mac-dmg sign notarize clean help
-
-## Default: build the macOS .app bundle (universal binary).
-all: mac
-
-# ── Icon font ────────────────────────────────────────────────
-# Delegate to parent Makefile when the font file is absent.
+## Default: demo macOS .app for the current host arch.
+all: demo-arm64
 
 ../assets/icons.ttf:
-	$(MAKE) -C .. assets/icons.ttf
-
-# ── Windows .ico ─────────────────────────────────────────────
-# Delegate to parent Makefile when the .ico has not been generated.
+	$(MAKE) -C .. icons
 
 ../assets/appicon.ico: ../assets/appicon.png
-	$(MAKE) -C .. assets/appicon.ico
+	$(MAKE) -C .. appicon-ico
 
-# ── macOS demo .app ──────────────────────────────────────────
+# -----------------------------------------------------------------------
+# Per-arch demo GUI → demo/dist/
+# -----------------------------------------------------------------------
 
-## macOS universal .app bundle (demo).
-##   Requires: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-mac: $(ICON_TTF) | $(MACOS_DIR_T) $(RES_DIR_T)
-	@echo ">>> Building demo macOS .app  (schema: $(SCHEMA))"
+demo-arm64: $(ICON_TTF)
+	$(MAKE) _mac_demo_app PM_ARCH_SLUG=$(ARCH_DARWIN_ARM64) \
+		PM_RUST_TARGET=$(RUST_TARGET_ARM64) \
+		PM_SETTINGS_BIN=../target/$(RUST_TARGET_ARM64)/release/$(EXE_NAME)
+	@echo ">>> Done: $(APP_ARM64)"
+	@echo "    Run:  open '$(APP_ARM64)'"
+
+demo-x86_64: $(ICON_TTF)
+	$(MAKE) _mac_demo_app PM_ARCH_SLUG=$(ARCH_DARWIN_X86) \
+		PM_RUST_TARGET=$(RUST_TARGET_X86) \
+		PM_SETTINGS_BIN=../target/$(RUST_TARGET_X86)/release/$(EXE_NAME)
+	@echo ">>> Done: $(APP_X86)"
+
+.PHONY: _mac_demo_app
+_mac_demo_app:
+	@test -n "$(PM_ARCH_SLUG)" && test -n "$(PM_RUST_TARGET)" && test -n "$(PM_SETTINGS_BIN)"
+	@echo ">>> Building demo macOS .app  (arch: $(PM_ARCH_SLUG), schema: $(SCHEMA))"
 	MACOSX_DEPLOYMENT_TARGET=$(MIN_MACOS) SETTINGS_SCHEMA=$(SCHEMA) \
-		cargo build $(CARGO_MANIFEST) --release --target aarch64-apple-darwin
-	MACOSX_DEPLOYMENT_TARGET=$(MIN_MACOS) SETTINGS_SCHEMA=$(SCHEMA) \
-		cargo build $(CARGO_MANIFEST) --release --target x86_64-apple-darwin
-	lipo -create -output "$(MACOS_DIR)/$(APP_NAME)" \
-		../target/aarch64-apple-darwin/release/$(EXE_NAME) \
-		../target/x86_64-apple-darwin/release/$(EXE_NAME)
-	$(MAKE) _plist _icns_if_present
-	@echo ">>> Done: $(BUNDLE)"
-	@echo "    Run:  open $(BUNDLE)"
+		cargo build $(CARGO_MANIFEST) --release -p settings --target $(PM_RUST_TARGET)
+	@mkdir -p "$(DIST)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents/MacOS"
+	@mkdir -p "$(DIST)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents/Resources"
+	cp "$(PM_SETTINGS_BIN)" \
+		"$(DIST)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents/MacOS/$(APP_NAME)"
+	cp "$(CONFIG)" \
+		"$(DIST)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents/Resources/config.toml"
+	$(MAKE) _plist PLIST_CONTENTS="$(DIST)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents"
+	$(MAKE) _icns_if_present \
+		ICNS_RES_DIR="$(DIST)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents/Resources" \
+		ICNS_OUT="$(DIST)/$(PM_ARCH_SLUG)/$(APP_NAME).app/Contents/Resources/AppIcon.icns"
 
-# ── Info.plist ───────────────────────────────────────────────
-# Always re-generated so version changes in Cargo.toml propagate automatically.
+demo-win: $(ICON_TTF) $(APPICON_ICO)
+	@echo ">>> Building demo Windows .exe  (schema: $(SCHEMA))"
+	SETTINGS_SCHEMA=$(SCHEMA) CARGO_TARGET_DIR="$(WIN_TARGET_DIR)" \
+		cargo build $(CARGO_MANIFEST) --release -p settings --target $(WIN_TARGET)
+	@mkdir -p "$(DIST)/$(ARCH_WIN)"
+	@cp "$(WIN_TARGET_DIR)/$(WIN_TARGET)/release/settings.exe" "$(WIN_EXE)"
+	@cp "$(CONFIG)" "$(DIST)/$(ARCH_WIN)/config.toml"
+	@echo ">>> Output: $(WIN_EXE)"
+
+demo-linux: $(ICON_TTF)
+	@echo ">>> Building demo Linux binary  (schema: $(SCHEMA))"
+	SETTINGS_SCHEMA=$(SCHEMA) cargo build $(CARGO_MANIFEST) --release -p settings
+	@mkdir -p "$(DIST)/$(ARCH_LINUX)"
+	@cp ../target/release/$(EXE_NAME) "$(LINUX_BIN)"
+	@cp "$(CONFIG)" "$(DIST)/$(ARCH_LINUX)/config.toml"
+	@echo ">>> Output: $(LINUX_BIN)"
+
+# -----------------------------------------------------------------------
+# Packages
+# -----------------------------------------------------------------------
+
+demo-zip-arm64: demo-arm64
+	ditto -c -k --keepParent "$(APP_ARM64)" "$(APP_ZIP_ARM64)"
+	@echo ">>> Package: $(APP_ZIP_ARM64)"
+
+demo-zip-x86_64: demo-x86_64
+	ditto -c -k --keepParent "$(APP_X86)" "$(APP_ZIP_X86)"
+	@echo ">>> Package: $(APP_ZIP_X86)"
+
+demo-zip-win: demo-win
+	@rm -f "$(WIN_ZIP)"
+	cd "$(DIST)/$(ARCH_WIN)" && \
+		zip "../../$(notdir $(WIN_ZIP))" "$(APP_NAME).exe" config.toml
+	@echo ">>> Package: $(WIN_ZIP)"
+
+demo-dmg-arm64: demo-arm64
+	@command -v dmgbuild >/dev/null 2>&1 || (echo "Error: dmgbuild not found. Run: pipx install dmgbuild" && exit 1)
+	dmgbuild -s "$(DMG_SETTINGS)" -D app="$(APP_ARM64)" "$(APP_NAME)" "$(APP_DMG_ARM64)"
+	@echo ">>> Package: $(APP_DMG_ARM64)"
+
+demo-dmg-x86_64: demo-x86_64
+	@command -v dmgbuild >/dev/null 2>&1 || (echo "Error: dmgbuild not found. Run: pipx install dmgbuild" && exit 1)
+	dmgbuild -s "$(DMG_SETTINGS)" -D app="$(APP_X86)" "$(APP_NAME)" "$(APP_DMG_X86)"
+	@echo ">>> Package: $(APP_DMG_X86)"
+
+# -----------------------------------------------------------------------
+# Code signing / notarization
+# -----------------------------------------------------------------------
+
+sign-arm64: demo-arm64
+	@test -n "$(CERT)" || (echo "Error: APPLE_DEVELOPER_CERTIFICATE_NAME is not set" && exit 1)
+	xattr -cr "$(APP_ARM64)"
+	codesign --deep --force --options runtime \
+		--entitlements entitlements.plist \
+		--sign "$(CERT)" \
+		"$(APP_ARM64)"
+	@echo ">>> Signed: $(APP_ARM64)"
+
+sign-x86_64: demo-x86_64
+	@test -n "$(CERT)" || (echo "Error: APPLE_DEVELOPER_CERTIFICATE_NAME is not set" && exit 1)
+	xattr -cr "$(APP_X86)"
+	codesign --deep --force --options runtime \
+		--entitlements entitlements.plist \
+		--sign "$(CERT)" \
+		"$(APP_X86)"
+	@echo ">>> Signed: $(APP_X86)"
+
+notarize-arm64: sign-arm64
+	@test -n "$(TEAM_ID)"   || (echo "Error: APPLE_DEVELOPER_TEAM_ID is not set"      && exit 1)
+	@test -n "$(APPLE_ID_)" || (echo "Error: APPLE_ID is not set"                     && exit 1)
+	@test -n "$(APP_PASS)"  || (echo "Error: APPLE_DEVELOPER_APP_PASSWORD is not set" && exit 1)
+	@command -v dmgbuild >/dev/null 2>&1 || (echo "Error: dmgbuild not found. Run: pipx install dmgbuild" && exit 1)
+	dmgbuild -s "$(DMG_SETTINGS)" -D app="$(APP_ARM64)" "$(APP_NAME)" "$(APP_DMG_ARM64)"
+	xcrun notarytool submit "$(APP_DMG_ARM64)" \
+		--apple-id  "$(APPLE_ID_)" \
+		--password  "$(APP_PASS)" \
+		--team-id   "$(TEAM_ID)" \
+		--wait
+	xcrun stapler staple "$(APP_DMG_ARM64)"
+	@echo ">>> Notarized and stapled: $(APP_DMG_ARM64)"
+
+notarize-x86_64: sign-x86_64
+	@test -n "$(TEAM_ID)"   || (echo "Error: APPLE_DEVELOPER_TEAM_ID is not set"      && exit 1)
+	@test -n "$(APPLE_ID_)" || (echo "Error: APPLE_ID is not set"                     && exit 1)
+	@test -n "$(APP_PASS)"  || (echo "Error: APPLE_DEVELOPER_APP_PASSWORD is not set" && exit 1)
+	@command -v dmgbuild >/dev/null 2>&1 || (echo "Error: dmgbuild not found. Run: pipx install dmgbuild" && exit 1)
+	dmgbuild -s "$(DMG_SETTINGS)" -D app="$(APP_X86)" "$(APP_NAME)" "$(APP_DMG_X86)"
+	xcrun notarytool submit "$(APP_DMG_X86)" \
+		--apple-id  "$(APPLE_ID_)" \
+		--password  "$(APP_PASS)" \
+		--team-id   "$(TEAM_ID)" \
+		--wait
+	xcrun stapler staple "$(APP_DMG_X86)"
+	@echo ">>> Notarized and stapled: $(APP_DMG_X86)"
+
+# Backward-compatible aliases (deprecated).
+mac: demo-arm64
+win: demo-win
+linux: demo-linux
+win-zip: demo-zip-win
+mac-zip: demo-zip-arm64
+mac-dmg: demo-dmg-arm64
+sign: sign-arm64
+notarize: notarize-arm64
+
+# -----------------------------------------------------------------------
+# Info.plist / ICNS
+# -----------------------------------------------------------------------
+
+PLIST_CONTENTS ?=
 
 .PHONY: _plist
-_plist: | $(CONTENTS_T)
+_plist:
+	@test -n "$(PLIST_CONTENTS)"
 	@printf '%s\n' \
 		'<?xml version="1.0" encoding="UTF-8"?>' \
 		'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
@@ -143,21 +249,23 @@ _plist: | $(CONTENTS_T)
 		'	<key>LSUIElement</key>               <false/>' \
 		'</dict>' \
 		'</plist>' \
-		> "$(CONTENTS)/Info.plist"
+		> "$(PLIST_CONTENTS)/Info.plist"
 
-# ── App icon ─────────────────────────────────────────────────
-# Skip gracefully when assets/appicon-macos.png does not exist.
+ICNS_RES_DIR ?=
+ICNS_OUT       ?=
 
 .PHONY: _icns_if_present
-_icns_if_present: | $(RES_DIR_T)
+_icns_if_present:
+	@test -n "$(ICNS_RES_DIR)" && test -n "$(ICNS_OUT)"
 	@if [ -f "$(ICON_SRC_MACOS)" ]; then \
-		$(MAKE) _icns_build; \
+		$(MAKE) _icns_build ICNS_RES_DIR="$(ICNS_RES_DIR)" ICNS_OUT="$(ICNS_OUT)"; \
 	else \
 		echo "Note: $(ICON_SRC_MACOS) not found — skipping icon generation."; \
 	fi
 
 .PHONY: _icns_build
-_icns_build: | $(RES_DIR_T)
+_icns_build:
+	@test -n "$(ICNS_RES_DIR)" && test -n "$(ICNS_OUT)"
 	mkdir -p "$(ICONSET)"
 	sips -z 16    16    "$(ICON_SRC_MACOS)" --out "$(ICONSET)/icon_16x16.png"      >/dev/null
 	sips -z 32    32    "$(ICON_SRC_MACOS)" --out "$(ICONSET)/icon_16x16@2x.png"   >/dev/null
@@ -169,94 +277,8 @@ _icns_build: | $(RES_DIR_T)
 	sips -z 512   512   "$(ICON_SRC_MACOS)" --out "$(ICONSET)/icon_256x256@2x.png" >/dev/null
 	sips -z 512   512   "$(ICON_SRC_MACOS)" --out "$(ICONSET)/icon_512x512.png"    >/dev/null
 	sips -z 1024  1024  "$(ICON_SRC_MACOS)" --out "$(ICONSET)/icon_512x512@2x.png" >/dev/null
-	iconutil -c icns "$(ICONSET)" -o "$(ICNS)"
+	iconutil -c icns "$(ICONSET)" -o "$(ICNS_OUT)"
 	rm -rf "$(ICONSET)"
-
-# ── Windows demo .exe ────────────────────────────────────────
-
-## Windows .exe (cross-compiled from macOS via mingw-w64, demo).
-##   Prerequisites: brew install mingw-w64
-##                  rustup target add x86_64-pc-windows-gnu
-win: $(ICON_TTF) $(APPICON_ICO)
-	@echo ">>> Building demo Windows .exe  (schema: $(SCHEMA))"
-	SETTINGS_SCHEMA=$(SCHEMA) CARGO_TARGET_DIR="$(WIN_TARGET_DIR)" \
-		cargo build $(CARGO_MANIFEST) --release --target $(WIN_TARGET)
-	@mkdir -p "$(WIN_DIR)"
-	@cp "$(WIN_TARGET_DIR)/$(WIN_TARGET)/release/settings.exe" "$(WIN_EXE)"
-	@echo ">>> Output: $(WIN_EXE)"
-
-## Package the Windows .exe into a distributable zip.
-win-zip: win
-	@cd "$(DIST)" && zip -j "$(notdir $(WIN_ZIP))" "settings-windows/$(APP_NAME).exe"
-	@echo ">>> Package: $(WIN_ZIP)"
-
-# ── Linux demo binary ────────────────────────────────────────
-
-## Linux release binary (demo, run natively on a Linux host).
-linux: $(ICON_TTF)
-	@echo ">>> Building demo Linux binary  (schema: $(SCHEMA))"
-	SETTINGS_SCHEMA=$(SCHEMA) cargo build $(CARGO_MANIFEST) --release
-	@mkdir -p "$(DIST)"
-	@cp ../target/release/$(EXE_NAME) "$(LINUX_BIN)"
-	@echo ">>> Output: $(LINUX_BIN)"
-
-# ── Distribution (macOS) ─────────────────────────────────────
-
-## Create a distributable zip of the macOS .app bundle.
-mac-zip: mac
-	ditto -c -k --keepParent "$(BUNDLE)" "$(APP_ZIP)"
-	@echo ">>> Package: $(APP_ZIP)"
-
-## Create a distributable DMG.
-mac-dmg: mac
-	@command -v dmgbuild >/dev/null 2>&1 || (echo "Error: dmgbuild not found. Run: pipx install dmgbuild" && exit 1)
-	dmgbuild -s "$(DMG_SETTINGS)" -D app="$(BUNDLE)" "$(APP_NAME)" "$(APP_DMG)"
-	@echo ">>> Package: $(APP_DMG)"
-
-# ── Code signing ─────────────────────────────────────────────
-
-## Code-sign the .app bundle with hardened runtime.
-sign: mac
-	@test -n "$(CERT)" || (echo "Error: APPLE_DEVELOPER_CERTIFICATE_NAME is not set" && exit 1)
-	xattr -cr "$(BUNDLE)"
-	codesign --deep --force --options runtime \
-		--entitlements entitlements.plist \
-		--sign "$(CERT)" \
-		"$(BUNDLE)"
-	@echo ">>> Signed: $(BUNDLE)"
-
-# ── Notarization ─────────────────────────────────────────────
-
-## Sign the .app, create a DMG, submit for notarization, and staple.
-notarize: sign
-	@test -n "$(TEAM_ID)"   || (echo "Error: APPLE_DEVELOPER_TEAM_ID is not set"      && exit 1)
-	@test -n "$(APPLE_ID_)" || (echo "Error: APPLE_ID is not set"                     && exit 1)
-	@test -n "$(APP_PASS)"  || (echo "Error: APPLE_DEVELOPER_APP_PASSWORD is not set" && exit 1)
-	@command -v dmgbuild >/dev/null 2>&1 || (echo "Error: dmgbuild not found. Run: pipx install dmgbuild" && exit 1)
-	dmgbuild -s "$(DMG_SETTINGS)" -D app="$(BUNDLE)" "$(APP_NAME)" "$(APP_DMG)"
-	xcrun notarytool submit "$(APP_DMG)" \
-		--apple-id  "$(APPLE_ID_)" \
-		--password  "$(APP_PASS)" \
-		--team-id   "$(TEAM_ID)" \
-		--wait
-	xcrun stapler staple "$(APP_DMG)"
-	@echo ">>> Notarized and stapled: $(APP_DMG)"
-
-# ── Directory scaffolding ────────────────────────────────────
-
-$(DIST):
-	mkdir -p "$(DIST)"
-
-$(CONTENTS_T): | $(DIST)
-	mkdir -p "$(CONTENTS)"
-
-$(MACOS_DIR_T): | $(CONTENTS_T)
-	mkdir -p "$(MACOS_DIR)"
-
-$(RES_DIR_T): | $(CONTENTS_T)
-	mkdir -p "$(RES_DIR)"
-
-# ── Maintenance ──────────────────────────────────────────────
 
 ## Remove demo build artefacts (does not touch parent target/).
 clean:
