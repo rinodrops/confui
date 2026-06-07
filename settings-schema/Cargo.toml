@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[[bin]]
+name = "settings-schema-checker"
+path = "src/bin/settings_schema_checker.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"

@@ -1,7 +1,7 @@
 //! Runtime schema loading and icon assets embedded at build time.
 //!
 //! Types, parsing, and validation live in the [`settings_schema`] crate so the
-//! schema-check tool and `build.rs` can share the same logic.
+//! settings-schema-checker and `build.rs` can share the same logic.
 
 pub use settings_schema::*;
 

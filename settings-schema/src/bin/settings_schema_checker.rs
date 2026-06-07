@@ -1,6 +1,6 @@
 //! Validate a `schema.toml` file (parse, cross-references, CEL syntax).
 //!
-//! Usage: `schema-check <path-to-schema.toml>`
+//! Usage: `settings-schema-checker <path-to-schema.toml>`
 
 use std::env;
 use std::path::PathBuf;
@@ -10,7 +10,7 @@ fn main() -> ExitCode {
     let path = match env::args().nth(1) {
         Some(p) => PathBuf::from(p),
         None => {
-            eprintln!("usage: schema-check <path-to-schema.toml>");
+            eprintln!("usage: settings-schema-checker <path-to-schema.toml>");
             eprintln!();
             eprintln!("Validates TOML syntax, constraint references, option_states,");
             eprintln!("and CEL expression syntax.");

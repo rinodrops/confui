@@ -180,69 +180,100 @@ pub enum SchemaValidationError {
     },
 }
 
-impl std::fmt::Display for SchemaValidationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl SchemaValidationError {
+    /// Short error summary for the `error:` line (no location suffix).
+    pub fn summary(&self) -> String {
         match self {
-            Self::DuplicateConstraintId { id } => {
-                write!(f, "duplicate constraint id {id:?}")
+            Self::DuplicateConstraintId { id } => format!("duplicate constraint id {id:?}"),
+            Self::UnknownConstraintRef { id, .. } => {
+                format!("unknown constraint id {id:?}")
             }
-            Self::UnknownConstraintRef { id, location } => {
-                write!(
-                    f,
-                    "unknown constraint id {id:?} referenced at {location}"
-                )
+            Self::MissingConstraintMessage { id, .. } => {
+                format!("constraint {id:?} is referenced but has no `message`")
             }
-            Self::MissingConstraintMessage { id, location } => {
-                write!(
-                    f,
-                    "constraint {id:?} is referenced from {location} but has no message; \
-                     add a `message` to [[constraints]] or use an inline [[validate]] rule"
-                )
+            Self::OptionStatesUnsupportedWidget { widget, .. } => format!(
+                "option_states is only allowed on segmented_control and select \
+                 (found widget={widget:?})"
+            ),
+            Self::OptionStateConflict { value, .. } => format!(
+                "option_states entry for value {value:?} must set either `when` or `enabled`, \
+                 not both"
+            ),
+            Self::OptionStateMissingRule { value, .. } => format!(
+                "option_states entry for value {value:?} must set `when` or `enabled`"
+            ),
+            Self::DuplicateOptionStateValue { value, .. } => {
+                format!("duplicate option_states value {value:?}")
             }
-            Self::OptionStatesUnsupportedWidget { location, widget } => {
-                write!(
-                    f,
-                    "option_states is only allowed on segmented_control and select \
-                     (found widget={widget:?} at {location})"
-                )
+            Self::UnknownOptionValue { value, .. } => {
+                format!("option_states value {value:?} is not listed in `options`")
             }
-            Self::OptionStateConflict { location, value } => {
-                write!(
-                    f,
-                    "option_states entry for value {value:?} at {location} must set \
-                     either `when` or `enabled`, not both"
-                )
-            }
-            Self::OptionStateMissingRule { location, value } => {
-                write!(
-                    f,
-                    "option_states entry for value {value:?} at {location} must set \
-                     `when` or `enabled`"
-                )
-            }
-            Self::DuplicateOptionStateValue { location, value } => {
-                write!(
-                    f,
-                    "duplicate option_states value {value:?} at {location}"
-                )
-            }
-            Self::UnknownOptionValue { location, value } => {
-                write!(
-                    f,
-                    "option_states value {value:?} at {location} is not listed in `options`"
-                )
-            }
-            Self::InvalidCelExpression {
-                location,
-                expr,
-                detail,
-            } => {
-                write!(
-                    f,
-                    "invalid CEL expression at {location}: {detail}\n  expr = {expr:?}"
-                )
+            Self::InvalidCelExpression { detail, .. } => {
+                format!("invalid CEL expression: {detail}")
             }
         }
+    }
+
+    /// Field context for the `-->` line, when applicable.
+    pub fn context(&self) -> Option<&str> {
+        match self {
+            Self::DuplicateConstraintId { .. } => Some("[[constraints]]"),
+            Self::UnknownConstraintRef { location, .. }
+            | Self::MissingConstraintMessage { location, .. }
+            | Self::OptionStatesUnsupportedWidget { location, .. }
+            | Self::OptionStateConflict { location, .. }
+            | Self::OptionStateMissingRule { location, .. }
+            | Self::DuplicateOptionStateValue { location, .. }
+            | Self::UnknownOptionValue { location, .. }
+            | Self::InvalidCelExpression { location, .. } => Some(location),
+        }
+    }
+
+    /// Actionable hint for the `help:` line.
+    pub fn help(&self) -> &'static str {
+        match self {
+            Self::DuplicateConstraintId { .. } => {
+                "use a unique `id` for each [[constraints]] entry"
+            }
+            Self::UnknownConstraintRef { .. } => {
+                "add a [[constraints]] entry with this id or change the field's validate reference"
+            }
+            Self::MissingConstraintMessage { .. } => {
+                "add a `message` to [[constraints]] or use an inline [[validate]] rule"
+            }
+            Self::OptionStatesUnsupportedWidget { .. } => {
+                "remove [[tabs.fields.option_states]] or change widget to segmented_control / select"
+            }
+            Self::OptionStateConflict { .. } => {
+                "set either `when` or `enabled` on the option_states entry, not both"
+            }
+            Self::OptionStateMissingRule { .. } => {
+                "add `when` or `enabled` to the option_states entry"
+            }
+            Self::DuplicateOptionStateValue { .. } => {
+                "remove the duplicate option_states entry for this value"
+            }
+            Self::UnknownOptionValue { .. } => {
+                "use a value that appears in the field's `options` list"
+            }
+            Self::InvalidCelExpression { .. } => {
+                "fix the CEL syntax or use a supported function"
+            }
+        }
+    }
+
+    /// Extra detail lines shown after the context (e.g. CEL source).
+    pub fn detail_lines(&self) -> Vec<String> {
+        match self {
+            Self::InvalidCelExpression { expr, .. } => vec![format!("expr = {expr:?}")],
+            _ => Vec::new(),
+        }
+    }
+}
+
+impl std::fmt::Display for SchemaValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.summary())
     }
 }
 
@@ -495,21 +526,50 @@ pub fn check_schema_file(path: &Path) -> Result<(), String> {
     }
 }
 
-/// Formats all validation errors for terminal output (English).
+/// Formats all validation errors for terminal output (English, rustc-style).
 pub fn format_validation_errors(path: &Path, errors: &[SchemaValidationError]) -> String {
-    let mut out = format!(
-        "error: schema validation failed for {}\n",
-        path.display()
-    );
-    for err in errors {
-        out.push_str("  - ");
-        out.push_str(&err.to_string());
+    let filename = path
+        .file_name()
+        .map(|f| f.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "schema.toml".to_owned());
+
+    let mut out = String::new();
+    for (index, err) in errors.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        out.push_str("error: ");
+        out.push_str(&err.summary());
+        out.push('\n');
+        if let Some(context) = err.context() {
+            out.push_str("  --> ");
+            out.push_str(&filename);
+            out.push_str(" (");
+            out.push_str(context);
+            out.push_str(")\n");
+            for line in err.detail_lines() {
+                out.push_str("      ");
+                out.push_str(&line);
+                out.push('\n');
+            }
+        }
+        out.push_str("help: ");
+        out.push_str(err.help());
         out.push('\n');
     }
-    out.push_str(
-        "help: fix all reported issues, then run \
-         `cargo run --bin schema-check -- <path-to-schema.toml>`\n",
-    );
+
+    if errors.len() > 1 {
+        out.push('\n');
+        out.push_str(&format!(
+            "error: {} validation errors in {}\n",
+            errors.len(),
+            path.display()
+        ));
+    }
+
+    out.push_str("help: fix all reported issues, then run `settings-schema-checker ");
+    out.push_str(&path.display().to_string());
+    out.push_str("`\n");
     out
 }
 
