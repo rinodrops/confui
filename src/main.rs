@@ -3,6 +3,7 @@ mod config;
 mod i18n;
 mod schema;
 mod theme;
+mod validation;
 
 use std::path::PathBuf;
 

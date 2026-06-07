@@ -77,6 +77,17 @@ description = "The third fixed section"
 password = ""
 mode = "opt3"
 
+# ── Validation (CEL demo) ────────────────────────────────────────────────────
+
+[validation.chars]
+bearded_dragon = 0
+leopard_gecko = 0
+corn_snake = 0
+
+[validation]
+email = "not-an-email"
+password = "short"
+
 # ── Variable Sections ────────────────────────────────────────────────────────
 # sections: item1 / item2 (user can add or delete)
 # category refers to the keys of fixed_sections (alpha / beta / gamma) using options_from.

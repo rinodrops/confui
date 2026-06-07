@@ -4,6 +4,8 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Deserializer};
 
+pub mod runtime;
+
 /// Parse a schema from a TOML string.
 pub fn parse(src: &str) -> Result<Schema, toml::de::Error> {
     toml::from_str(src)
