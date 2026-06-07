@@ -1,5 +1,6 @@
 target/
 dist/
+settings-schema/Cargo.lock
 
 /assets/icons.ttf
 /assets/icons.codepoints
