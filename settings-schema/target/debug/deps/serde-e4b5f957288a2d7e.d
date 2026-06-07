@@ -1,0 +1,14 @@
+/Users/rino/Syncthing/Codebase/_/Settings/repos/settings/settings-schema/target/debug/deps/serde-e4b5f957288a2d7e.d: /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/rino/Syncthing/Codebase/_/Settings/repos/settings/settings-schema/target/debug/build/serde-258665a108843663/out/private.rs
+
+/Users/rino/Syncthing/Codebase/_/Settings/repos/settings/settings-schema/target/debug/deps/libserde-e4b5f957288a2d7e.rlib: /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/rino/Syncthing/Codebase/_/Settings/repos/settings/settings-schema/target/debug/build/serde-258665a108843663/out/private.rs
+
+/Users/rino/Syncthing/Codebase/_/Settings/repos/settings/settings-schema/target/debug/deps/libserde-e4b5f957288a2d7e.rmeta: /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/rino/Syncthing/Codebase/_/Settings/repos/settings/settings-schema/target/debug/build/serde-258665a108843663/out/private.rs
+
+/Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/rino/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/rino/Syncthing/Codebase/_/Settings/repos/settings/settings-schema/target/debug/build/serde-258665a108843663/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/rino/Syncthing/Codebase/_/Settings/repos/settings/settings-schema/target/debug/build/serde-258665a108843663/out

@@ -3,7 +3,16 @@ name = "settings"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "settings"
+path = "src/main.rs"
+
+[[bin]]
+name = "schema-check"
+path = "src/bin/schema_check.rs"
+
 [dependencies]
+settings-schema = { path = "settings-schema" }
 eframe = "0.31"
 egui = "0.31"
 toml = "0.8"
@@ -29,4 +38,5 @@ opt-level = 3
 strip = true
 
 [build-dependencies]
+settings-schema = { path = "settings-schema" }
 winresource = "0.1"

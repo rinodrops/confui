@@ -72,7 +72,7 @@ ICON_CP_FILE  := MaterialSymbols$(ICON_VARIANT)%5BFILL%2CGRAD%2Copsz%2Cwght%5D.c
 
 # ── targets ─────────────────────────────────────────────────
 
-.PHONY: all binary win win-zip icons appicon-ico clean help
+.PHONY: all binary schema-check win win-zip icons appicon-ico clean help
 
 ## Default: build the release binary (current arch).
 all: binary
@@ -103,6 +103,11 @@ $(APPICON_ICO): assets/appicon.png
 appicon-ico:
 	@rm -f "$(APPICON_ICO)"
 	$(MAKE) $(APPICON_ICO)
+
+## Validate schema.toml without building the GUI binary.
+schema-check:
+	@echo ">>> Validating schema  (schema: $(ABS_SCHEMA))"
+	cargo run --quiet --bin schema-check -- "$(ABS_SCHEMA)"
 
 ## macOS / Linux release binary (current arch, for bundling into parent app).
 binary: $(ICON_TTF)
