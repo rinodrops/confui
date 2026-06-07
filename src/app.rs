@@ -5,6 +5,7 @@ use crate::config::{ConfigStore, NumberRepr};
 use crate::i18n::t;
 use crate::schema::{Field, FieldType, SaveButtonMode, SectionMap, SectionTabStyle, Schema, ThemeMode as SchemaThemeMode, WidgetKind};
 use crate::theme::{self, Palette, Variant};
+use settings_schema::runtime::ValidationEngine;
 
 /// Pending background file-picker: (config key path, result receiver).
 type PendingFilePick = Option<(String, mpsc::Receiver<Option<std::path::PathBuf>>)>;
@@ -133,6 +134,8 @@ pub struct SettingsApp {
     last_save: Option<std::time::Instant>,
     /// Set when an external file change is detected while unsaved edits exist.
     file_conflict: bool,
+    /// Compiled CEL programs for field validation and option_states.
+    validation: ValidationEngine,
 }
 
 struct AddDialog {
@@ -167,6 +170,8 @@ impl SettingsApp {
         #[cfg(not(has_icons))]
         let icon_map = HashMap::new();
         let save_button_mode = schema.save_button;
+        let validation = ValidationEngine::compile(&schema)
+            .expect("schema CEL expressions must compile (checked at build time)");
         let config_path = config.path().to_path_buf();
         let (watch_tx, watch_rx) = std::sync::mpsc::channel::<notify::Result<notify::Event>>();
         let watcher = {
@@ -201,6 +206,7 @@ impl SettingsApp {
             watch_rx: Some(watch_rx),
             last_save: None,
             file_conflict: false,
+            validation,
         }
     }
 }
@@ -474,6 +480,7 @@ impl eframe::App for SettingsApp {
         if show_save_btn {
             let accent = self.palette.accent;
             let dirty = self.config.is_dirty();
+            let valid = self.validation.is_valid(&self.schema, &self.config);
             egui::TopBottomPanel::bottom("bottom_bar")
                 .exact_height(BOTTOM_BAR_H)
                 .show(ctx, |ui| {
@@ -488,7 +495,7 @@ impl eframe::App for SettingsApp {
                             // Apply (rightmost): persist changes, stay open.
                             // Disabled while there is nothing to apply.
                             let apply = ui.add_enabled(
-                                dirty,
+                                dirty && valid,
                                 action_button(t().apply, false, accent),
                             );
                             if apply.clicked() {
@@ -502,7 +509,11 @@ impl eframe::App for SettingsApp {
                                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                             }
                             // OK (leftmost, primary): persist if needed, then close.
-                            if ui.add(action_button(t().ok, true, accent)).clicked() {
+                            let ok = ui.add_enabled(
+                                valid,
+                                action_button(t().ok, true, accent),
+                            );
+                            if ok.clicked() {
                                 if dirty {
                                     if let Err(e) = self.config.save() {
                                         eprintln!("Save error: {e}");
@@ -525,7 +536,10 @@ impl eframe::App for SettingsApp {
             SaveButtonMode::Show => false,
             SaveButtonMode::Os  => cfg!(target_os = "macos"),
         };
-        if auto_save && self.config.take_dirty() {
+        if auto_save
+            && self.config.is_dirty()
+            && self.validation.is_valid(&self.schema, &self.config)
+        {
             if let Err(e) = self.config.save() {
                 eprintln!("Auto-save error: {e}");
             }
@@ -551,13 +565,26 @@ impl eframe::App for SettingsApp {
                     .or(self.schema.content_height)
                     .unwrap_or(440.0);
                 if let Some(fields) = self.schema.tabs[tab_idx].fields.as_deref() {
-                    show_flat_fields(ui, fields, tab_idx, max_height, &mut self.config, &mut self.show_secrets, &mut self.pending_file_pick, accent);
+                    show_flat_fields(
+                        ui,
+                        fields,
+                        tab_idx,
+                        max_height,
+                        &self.schema,
+                        &mut self.validation,
+                        &mut self.config,
+                        &mut self.show_secrets,
+                        &mut self.pending_file_pick,
+                        accent,
+                    );
                 } else if let Some(sm) = self.schema.tabs[tab_idx].section_map.as_ref() {
                     show_section_map(
                         ui,
                         tab_idx,
                         max_height,
                         sm,
+                        &self.schema,
+                        &mut self.validation,
                         &mut self.config,
                         &mut self.show_secrets,
                         &mut self.selected_sub,
@@ -580,6 +607,8 @@ fn show_flat_fields(
     fields: &[Field],
     tab_id: usize,
     max_height: f32,
+    schema: &Schema,
+    validation: &mut ValidationEngine,
     config: &mut ConfigStore,
     show_secrets: &mut HashMap<String, bool>,
     pending: &mut PendingFilePick,
@@ -600,19 +629,22 @@ fn show_flat_fields(
                         render_separator_row(ui);
                         continue;
                     }
-                    render_field(ui, field, &field.key, config, show_secrets, pending, accent);
+                    let key_path = field.key.as_str();
+                    let errors = validation.field_errors(schema, field, key_path, config);
+                    render_field(
+                        ui,
+                        field,
+                        key_path,
+                        schema,
+                        validation,
+                        &errors,
+                        config,
+                        show_secrets,
+                        pending,
+                        accent,
+                    );
                     ui.end_row();
-                    if let Some(hint) = field_hint(field, &field.key, config) {
-                        ui.label("");
-                        egui::Frame::default()
-                            .inner_margin(egui::Margin { left: FOCUS_RING_PAD as i8, ..Default::default() })
-                            .show(ui, |ui| {
-                                ui.add(egui::Label::new(
-                                    egui::RichText::new(hint).size(HINT_FONT_PX),
-                                ));
-                            });
-                        ui.end_row();
-                    }
+                    render_field_feedback(ui, &errors, field_hint(field, key_path, config));
                 }
             });
     });
@@ -627,6 +659,8 @@ fn show_section_map(
     tab_idx: usize,
     max_height: f32,
     sm: &SectionMap,
+    schema: &Schema,
+    validation: &mut ValidationEngine,
     config: &mut ConfigStore,
     show_secrets: &mut HashMap<String, bool>,
     selected_sub: &mut HashMap<usize, usize>,
@@ -697,19 +731,21 @@ fn show_section_map(
                             continue;
                         }
                         let key_path = format!("{section_path}.{}", field.key);
-                        render_field(ui, field, &key_path, config, show_secrets, pending, accent);
+                        let errors = validation.field_errors(schema, field, &key_path, config);
+                        render_field(
+                            ui,
+                            field,
+                            &key_path,
+                            schema,
+                            validation,
+                            &errors,
+                            config,
+                            show_secrets,
+                            pending,
+                            accent,
+                        );
                         ui.end_row();
-                        if let Some(hint) = field_hint(field, &key_path, config) {
-                            ui.label("");
-                            egui::Frame::default()
-                                .inner_margin(egui::Margin { left: FOCUS_RING_PAD as i8, ..Default::default() })
-                                .show(ui, |ui| {
-                                    ui.add(egui::Label::new(
-                                        egui::RichText::new(hint).size(HINT_FONT_PX),
-                                    ));
-                                });
-                            ui.end_row();
-                        }
+                        render_field_feedback(ui, &errors, field_hint(field, &key_path, config));
                     }
                 });
     });
@@ -1031,11 +1067,15 @@ fn render_field(
     ui: &mut egui::Ui,
     field: &Field,
     key_path: &str,
+    schema: &Schema,
+    validation: &mut ValidationEngine,
+    validation_errors: &[String],
     config: &mut ConfigStore,
     show_secrets: &mut HashMap<String, bool>,
     pending: &mut PendingFilePick,
     accent: egui::Color32,
 ) {
+    let invalid = !validation_errors.is_empty();
     // --- Label vertical alignment -----------------------------------------
     //
     // egui's `Grid` vertically centers each cell (`Align2::LEFT_CENTER`), and
@@ -1091,7 +1131,18 @@ fn render_field(
         .show(ui, |ui| {
             if let Some(sl) = &field.sublabel {
                 ui.horizontal(|ui| {
-                    render_widget_inner(ui, field, key_path, config, show_secrets, pending, accent);
+                    render_widget_inner(
+                        ui,
+                        field,
+                        key_path,
+                        schema,
+                        validation,
+                        invalid,
+                        config,
+                        show_secrets,
+                        pending,
+                        accent,
+                    );
                     ui.add_space(6.0);
                     ui.label(
                         egui::RichText::new(sl.get())
@@ -1100,7 +1151,18 @@ fn render_field(
                     );
                 });
             } else {
-                render_widget_inner(ui, field, key_path, config, show_secrets, pending, accent);
+                render_widget_inner(
+                    ui,
+                    field,
+                    key_path,
+                    schema,
+                    validation,
+                    invalid,
+                    config,
+                    show_secrets,
+                    pending,
+                    accent,
+                );
             }
         });
 
@@ -1113,6 +1175,9 @@ fn render_widget_inner(
     ui: &mut egui::Ui,
     field: &Field,
     key_path: &str,
+    schema: &Schema,
+    validation: &mut ValidationEngine,
+    invalid: bool,
     config: &mut ConfigStore,
     show_secrets: &mut HashMap<String, bool>,
     pending: &mut PendingFilePick,
@@ -1124,7 +1189,7 @@ fn render_widget_inner(
             let mut buf = current.clone();
             let w = clamped_width(ui.available_width(), field.min_width, field.max_width);
             let resp = ui.add(egui::TextEdit::singleline(&mut buf).desired_width(w));
-            paint_focus_border(ui, &resp, accent);
+            paint_field_border(ui, &resp, accent, invalid);
             retain_focus_after_ime(ui, &resp);
             if resp.changed() {
                 config.set_str(key_path, &buf);
@@ -1148,7 +1213,7 @@ fn render_widget_inner(
         WidgetKind::Separator => {}
 
         WidgetKind::SecretInput => {
-            render_secret_input(ui, key_path, config, show_secrets, accent);
+            render_secret_input(ui, key_path, config, show_secrets, accent, invalid);
         }
 
         WidgetKind::Checkbox => {
@@ -1168,7 +1233,7 @@ fn render_widget_inner(
                     .desired_rows(field.rows.unwrap_or(4))
                     .desired_width(w),
             );
-            paint_focus_border(ui, &resp, accent);
+            paint_field_border(ui, &resp, accent, invalid);
             if resp.changed() {
                 config.set_str(key_path, &buf);
             }
@@ -1188,7 +1253,11 @@ fn render_widget_inner(
                 .selected_text(selected.as_str())
                 .show_ui(ui, |ui| {
                     for opt in &options {
-                        ui.selectable_value(&mut selected, opt.clone(), opt.as_str());
+                        let enabled =
+                            validation.option_enabled(schema, field, key_path, opt, config);
+                        ui.add_enabled_ui(enabled, |ui| {
+                            ui.selectable_value(&mut selected, opt.clone(), opt.as_str());
+                        });
                     }
                 });
             if selected != current {
@@ -1197,7 +1266,7 @@ fn render_widget_inner(
         }
 
         WidgetKind::SegmentedControl => {
-            render_segmented_control(ui, field, key_path, config, accent);
+            render_segmented_control(ui, field, key_path, schema, validation, config, accent);
         }
 
         WidgetKind::ExclusiveRadio => {
@@ -1206,10 +1275,10 @@ fn render_widget_inner(
 
         WidgetKind::FilePath => {
             if pending.is_none() {
-                *pending = render_file_path(ui, field, key_path, config, accent);
+                *pending = render_file_path(ui, field, key_path, config, accent, invalid);
             } else {
                 // Another pick is still in flight — show the text field but disable the button.
-                render_file_path(ui, field, key_path, config, accent);
+                render_file_path(ui, field, key_path, config, accent, invalid);
             }
         }
 
@@ -1235,6 +1304,7 @@ fn render_file_path(
     key_path: &str,
     config: &mut ConfigStore,
     accent: egui::Color32,
+    invalid: bool,
 ) -> Option<(String, mpsc::Receiver<Option<std::path::PathBuf>>)> {
     let current = config.get_str(key_path).unwrap_or("").to_owned();
     let mut buf  = current.clone();
@@ -1250,7 +1320,7 @@ fn render_file_path(
         let resp = ui.add(
             egui::TextEdit::singleline(&mut buf).desired_width(ui.available_width())
         );
-        paint_focus_border(ui, &resp, accent);
+        paint_field_border(ui, &resp, accent, invalid);
         retain_focus_after_ime(ui, &resp);
         if resp.changed() {
             config.set_str(key_path, &buf);
@@ -1811,6 +1881,8 @@ fn render_segmented_control(
     ui: &mut egui::Ui,
     field: &Field,
     key_path: &str,
+    schema: &Schema,
+    validation: &mut ValidationEngine,
     config: &mut ConfigStore,
     _accent: egui::Color32,
 ) {
@@ -1870,12 +1942,19 @@ fn render_segmented_control(
         egui::Sense::hover(),
     );
 
+    let enabled: Vec<bool> = segments
+        .labels
+        .iter()
+        .map(|label| validation.option_enabled(schema, field, key_path, label, config))
+        .collect();
+
     let mut changed_index = None;
     paint_segmented_control_track(
         ui,
         outer_rect,
         &segments.labels,
         &segments.selected,
+        &enabled,
         key_path,
         seg_w,
         seg_h,
@@ -1902,6 +1981,7 @@ fn paint_segmented_control_track(
     outer_rect: egui::Rect,
     labels: &[String],
     selected: &[bool],
+    enabled: &[bool],
     key_path: &str,
     seg_w: f32,
     seg_h: f32,
@@ -1924,12 +2004,13 @@ fn paint_segmented_control_track(
             egui::pos2(outer_rect.min.x + i as f32 * seg_w, outer_rect.min.y),
             egui::vec2(seg_w, seg_h),
         );
-        let resp = ui.interact(
-            seg_rect,
-            egui::Id::new(key_path).with(i),
-            egui::Sense::click(),
-        );
-        if resp.clicked() {
+        let sense = if enabled[i] {
+            egui::Sense::click()
+        } else {
+            egui::Sense::hover()
+        };
+        let resp = ui.interact(seg_rect, egui::Id::new(key_path).with(i), sense);
+        if enabled[i] && resp.clicked() {
             *changed_index = Some(i);
         }
         segs.push((seg_rect, selected[i], resp.hovered()));
@@ -1957,12 +2038,17 @@ fn paint_segmented_control_track(
         }
 
         for (i, (seg_rect, _, _)) in segs.iter().enumerate() {
+            let color = if enabled[i] {
+                ui.visuals().text_color()
+            } else {
+                pal.icon_disabled
+            };
             painter.text(
                 seg_rect.center(),
                 egui::Align2::CENTER_CENTER,
                 labels[i].as_str(),
                 egui::FontId::proportional(FIELD_FONT_PX),
-                ui.visuals().text_color(),
+                color,
             );
         }
     }
@@ -2215,7 +2301,7 @@ fn render_numeric(
     }).inner;
 
     if !use_slider {
-        paint_focus_border(ui, &resp, accent);
+        paint_field_border(ui, &resp, accent, false);
     }
 
     // Draw the right-side track (handle → right end) as a thin gray line.
@@ -2307,6 +2393,7 @@ fn render_secret_input(
     config: &mut ConfigStore,
     show_secrets: &mut HashMap<String, bool>,
     accent: egui::Color32,
+    invalid: bool,
 ) {
     // Material Symbols codepoints for visibility / visibility_off.
     const ICON_VISIBLE:  char = '\u{e8f4}';
@@ -2328,7 +2415,7 @@ fn render_secret_input(
                 .password(!*show)
                 .desired_width(input_w),
         );
-        paint_focus_border(ui, &resp, accent);
+        paint_field_border(ui, &resp, accent, invalid);
         retain_focus_after_ime(ui, &resp);
         changed = resp.changed();
 
@@ -2454,7 +2541,7 @@ fn render_exclusive_radio(
             let vpath = format!("{parent}.{}", v.field_key);
             match v.widget {
                 WidgetKind::SecretInput => {
-                    render_secret_input(ui, &vpath, config, show_secrets, accent);
+                    render_secret_input(ui, &vpath, config, show_secrets, accent, false);
                 }
                 _ => {
                     let current = config.get_str(&vpath).unwrap_or("").to_owned();
@@ -2463,7 +2550,7 @@ fn render_exclusive_radio(
                         egui::TextEdit::singleline(&mut buf)
                             .desired_width(f32::INFINITY),
                     );
-                    paint_focus_border(ui, &resp, accent);
+                    paint_field_border(ui, &resp, accent, false);
                     retain_focus_after_ime(ui, &resp);
                     if resp.changed() {
                         config.set_str(&vpath, &buf);
@@ -2577,19 +2664,63 @@ fn retain_focus_after_ime(ui: &egui::Ui, resp: &egui::Response) {
     }
 }
 
-fn paint_focus_border(ui: &egui::Ui, resp: &egui::Response, accent: egui::Color32) {
-    if resp.has_focus() {
-        // StrokeKind::Middle: the stroke is centered on the rect boundary.
-        // Expanding by (gap + width/2) places the stroke's inner edge exactly
-        // `gap` px outside the widget and its outer edge `gap + width` px outside.
-        // The Frame wrapper in render_field ensures there is layout space for the ring.
-        let half_w = FOCUS_RING_W * 0.5;
-        ui.painter().rect_stroke(
-            resp.rect.expand(FOCUS_RING_GAP + half_w),
-            egui::CornerRadius::same(FOCUS_RING_ROUNDING),
-            egui::Stroke::new(FOCUS_RING_W, accent),
-            egui::StrokeKind::Middle,
-        );
+fn paint_field_border(
+    ui: &egui::Ui,
+    resp: &egui::Response,
+    accent: egui::Color32,
+    invalid: bool,
+) {
+    let color = if invalid {
+        theme::current().error
+    } else if resp.has_focus() {
+        accent
+    } else {
+        return;
+    };
+    // StrokeKind::Middle: the stroke is centered on the rect boundary.
+    let half_w = FOCUS_RING_W * 0.5;
+    ui.painter().rect_stroke(
+        resp.rect.expand(FOCUS_RING_GAP + half_w),
+        egui::CornerRadius::same(FOCUS_RING_ROUNDING),
+        egui::Stroke::new(FOCUS_RING_W, color),
+        egui::StrokeKind::Middle,
+    );
+}
+
+/// Validation error rows (or hint when no errors). Must follow `ui.end_row()` for the field.
+fn render_field_feedback(ui: &mut egui::Ui, errors: &[String], hint: Option<&str>) {
+    if !errors.is_empty() {
+        ui.label("");
+        egui::Frame::default()
+            .inner_margin(egui::Margin {
+                left: FOCUS_RING_PAD as i8,
+                ..Default::default()
+            })
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    for err in errors {
+                        ui.add(egui::Label::new(
+                            egui::RichText::new(err)
+                                .size(HINT_FONT_PX)
+                                .color(theme::current().error),
+                        ));
+                    }
+                });
+            });
+        ui.end_row();
+    } else if let Some(hint) = hint {
+        ui.label("");
+        egui::Frame::default()
+            .inner_margin(egui::Margin {
+                left: FOCUS_RING_PAD as i8,
+                ..Default::default()
+            })
+            .show(ui, |ui| {
+                ui.add(egui::Label::new(
+                    egui::RichText::new(hint).size(HINT_FONT_PX),
+                ));
+            });
+        ui.end_row();
     }
 }
 

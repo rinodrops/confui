@@ -722,6 +722,7 @@ static LANG: OnceLock<Lang> = OnceLock::new();
 /// Subsequent calls are ignored (the first language wins).
 pub fn init(lang: Lang, ui_strings: &UiStrings) {
     let _ = LANG.set(lang);
+    settings_schema::set_active_lang_code(lang.code());
     let _ = STRINGS.set(merge(builtin(lang), ui_strings));
 }
 

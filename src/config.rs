@@ -109,6 +109,7 @@ impl ConfigStore {
     }
 
     /// Returns `true` if unsaved changes exist, then clears the flag.
+    #[allow(dead_code)] // retained for callers that peek-and-clear; auto-save uses `is_dirty`.
     pub fn take_dirty(&mut self) -> bool {
         let d = self.dirty;
         self.dirty = false;
@@ -235,6 +236,19 @@ impl ConfigStore {
     /// Return the immediate child keys of the table at `path`.
     /// Used to enumerate sub-sections for `section_map` tabs.
     pub fn section_keys(&self, path: &str) -> Vec<String> {
+        self.child_keys(path)
+    }
+
+    /// Immediate child keys of the table at `path` (`""` = document root).
+    pub fn child_keys(&self, path: &str) -> Vec<String> {
+        if path.is_empty() {
+            return self
+                .doc
+                .as_table()
+                .iter()
+                .map(|(k, _)| k.to_string())
+                .collect();
+        }
         self.get_item(path)
             .and_then(|item| item.as_table_like())
             .map(|t| t.iter().map(|(k, _)| k.to_string()).collect())
