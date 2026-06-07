@@ -145,7 +145,7 @@ ARCH slugs: `darwin-arm64`, `darwin-x86_64`, `windows-x86_64`, `linux-x86_64`.
 
 Full schema reference, widget guide, theming, and localization:
 
-**https://emotiongraphics.jp/docs/settings/**
+**https://emotiongraphics.jp/docs/ref/settings/**
 
 ### `segmented_control` and `type`
 

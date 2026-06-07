@@ -145,7 +145,7 @@ ARCH slug: `darwin-arm64`, `darwin-x86_64`, `windows-x86_64`, `linux-x86_64`。
 
 スキーマリファレンス・ウィジェットガイド・テーマ・ローカライズの詳細:
 
-**https://emotiongraphics.jp/docs/settings/**
+**https://emotiongraphics.jp/docs/ja/ref/settings/**
 
 ### `segmented_control` と `type`
 
