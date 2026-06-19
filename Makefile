@@ -1,6 +1,8 @@
 # ============================================================
 # Settings — production build targets
 # ============================================================
+# DEPRECATED: use Justfile instead (`just --list`).
+# This file remains during the migration period.
 # Usage:
 #   make binary            — release binary for parent-app bundling (current arch)
 #   make check-schema      — validate SCHEMA without building the GUI

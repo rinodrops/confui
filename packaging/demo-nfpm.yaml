@@ -1,0 +1,43 @@
+# nfpm config for Settings demo GUI (Debian package).
+# Usage: VERSION=x.y.z nfpm package -f packaging/demo-nfpm.yaml --packager deb --target demo/dist
+
+name: settings-demo
+arch: amd64
+platform: linux
+version: "${VERSION}"
+version_schema: none
+section: utils
+priority: optional
+maintainer: "eMotionGraphics Inc."
+description: |
+  Standalone demo of the Settings configuration window (widget showcase).
+license: MIT
+deb:
+  file_name_template: "{{ .PackageName }}-v{{ .Version }}-linux-x86_64"
+depends:
+  - libegl1
+  - libgl1
+  - libxcb1
+  - libxkbcommon0
+  - libwayland-client0
+contents:
+  - src: ./demo/dist/linux-x86_64/settings
+    dst: /usr/lib/settings-demo/settings
+    file_info:
+      mode: 0755
+  - src: ./demo/config.toml
+    dst: /usr/lib/settings-demo/config.toml
+    file_info:
+      mode: 0644
+  - src: ./packaging/demo-wrapper.sh
+    dst: /usr/bin/settings-demo
+    file_info:
+      mode: 0755
+  - src: ./packaging/settings-demo.desktop
+    dst: /usr/share/applications/settings-demo.desktop
+    file_info:
+      mode: 0644
+  - src: ./assets/appicon.png
+    dst: /usr/share/pixmaps/settings-demo.png
+    file_info:
+      mode: 0644
