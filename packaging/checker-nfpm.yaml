@@ -12,7 +12,6 @@ maintainer: "eMotionGraphics Inc."
 description: |
   Schema validation CLI for Settings.
 license: MIT
-file_name_template: "{{ .PackageName }}-v{{ .Version }}-linux-x86_64"
 contents:
   - src: ./dist/settings-schema-checker/linux-x86_64/settings-schema-checker
     dst: /usr/bin/settings-schema-checker
