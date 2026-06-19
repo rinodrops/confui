@@ -183,12 +183,14 @@ linux-deb: linux-build
     set -euo pipefail
     command -v nfpm >/dev/null 2>&1 || \
         { echo "Error: nfpm not found. See packaging/demo-nfpm.yaml" >&2; exit 1; }
+    ROOT="{{justfile_directory()}}/.."
+    cd "${ROOT}"
     VERSION="{{version}}" nfpm package \
         -f packaging/demo-nfpm.yaml \
         --packager deb \
-        --target "{{dist}}"
-    DEB="{{dist}}/settings-demo-v{{version}}-linux-x86_64.deb"
-    GENERATED="{{dist}}/settings-demo_{{version}}_amd64.deb"
+        --target demo/dist
+    DEB="demo/dist/settings-demo-v{{version}}-linux-x86_64.deb"
+    GENERATED="demo/dist/settings-demo_{{version}}_amd64.deb"
     rm -f "${DEB}"
     mv "${GENERATED}" "${DEB}"
     echo ">>> Package: ${DEB}"
@@ -198,6 +200,8 @@ linux-appimage: linux-build
     set -euo pipefail
     test -n "${LINUXDEPLOY:-}" && test -n "${APPIMAGETOOL:-}" || \
         { echo "Error: set LINUXDEPLOY and APPIMAGETOOL" >&2; exit 1; }
+    ROOT="{{justfile_directory()}}/.."
+    cd "${ROOT}"
     VERSION="{{version}}" LINUXDEPLOY="${LINUXDEPLOY}" APPIMAGETOOL="${APPIMAGETOOL}" \
         packaging/build-demo-appimage.sh
 
