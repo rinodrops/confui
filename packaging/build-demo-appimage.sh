@@ -19,7 +19,14 @@ mkdir -p "${APPDIR}"
 
 cp "${DIST}/linux-x86_64/settings" "${APPDIR}/settings"
 cp demo/config.toml "${APPDIR}/config.toml"
-cp assets/appicon.png "${APPDIR}/settings-demo.png"
+ICON="${APPDIR}/settings-demo.png"
+if command -v magick >/dev/null 2>&1; then
+    magick "${ROOT}/assets/appicon.png" -resize 256x256 -strip "${ICON}"
+elif command -v convert >/dev/null 2>&1; then
+    convert "${ROOT}/assets/appicon.png" -resize 256x256 -strip "${ICON}"
+else
+    cp "${ROOT}/assets/appicon.png" "${ICON}"
+fi
 cp packaging/settings-demo.desktop "${APPDIR}/settings-demo.desktop"
 chmod +x "${APPDIR}/settings"
 

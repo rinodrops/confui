@@ -40,6 +40,7 @@ jobs:
             libxcursor-dev \
             libxrandr-dev \
             libx11-dev \
+            imagemagick \
             zip \
             fuse \
             libfuse2
