@@ -12,8 +12,7 @@ maintainer: "eMotionGraphics Inc."
 description: |
   Standalone demo of the Settings configuration window (widget showcase).
 license: MIT
-deb:
-  file_name_template: "{{ .PackageName }}-v{{ .Version }}-linux-x86_64"
+file_name_template: "{{ .PackageName }}-v{{ .Version }}-linux-x86_64"
 depends:
   - libegl1
   - libgl1
