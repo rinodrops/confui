@@ -1,0 +1,21 @@
+# nfpm config for settings-schema-checker (Debian package).
+# Usage: VERSION=x.y.z nfpm package -f packaging/checker-nfpm.yaml --packager deb --target dist/settings-schema-checker
+
+name: settings-schema-checker
+arch: amd64
+platform: linux
+version: "${VERSION}"
+version_schema: none
+section: utils
+priority: optional
+maintainer: "eMotionGraphics Inc."
+description: |
+  Schema validation CLI for Settings.
+license: MIT
+deb:
+  file_name_template: "{{ .PackageName }}-v{{ .Version }}-linux-x86_64"
+contents:
+  - src: ./dist/settings-schema-checker/linux-x86_64/settings-schema-checker
+    dst: /usr/bin/settings-schema-checker
+    file_info:
+      mode: 0755

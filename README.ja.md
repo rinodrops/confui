@@ -50,11 +50,11 @@ min    = 1
 max    = 65535
 ```
 
-**2. ビルド:**
+**2. ビルド**（[just](https://github.com/casey/just) が必要）:
 
 ```bash
 cd settings
-SETTINGS_SCHEMA=/path/to/your/schema.toml make
+SETTINGS_SCHEMA=/path/to/your/schema.toml just binary
 ```
 
 **3. 親アプリから起動:**
@@ -96,45 +96,62 @@ std::process::Command::new(settings).spawn()?;
 members = ["myapp", "settings"]
 ```
 
-スキーマはビルド時に `SETTINGS_SCHEMA` 環境変数で指定します。`make` のデフォルトは `../schema.toml`（クレートルートの一階層上，親アプリのスキーマ）です。`SETTINGS_SCHEMA` を設定せず `cargo build` を直接実行した場合は `demo/schema.toml` にフォールバックします。
+スキーマはビルド時に `SETTINGS_SCHEMA` 環境変数で指定します。`just binary` の既定スキーマは `../schema.toml`（クレートルートの一階層上，親アプリのスキーマ）です。`SETTINGS_SCHEMA` を設定せず `cargo build` を直接実行した場合は `demo/schema.toml` にフォールバックします。
 
 ## ビルド
 
-| 場面                                 | 使用されるスキーマ                                          |
-| ------------------------------------ | ----------------------------------------------------------- |
-| `make`（上書きなし）                 | `../schema.toml` — クレートルートの一階層上，親アプリのスキーマ |
-| `make SCHEMA=/path/to/schema.toml`   | 指定パス                                                    |
-| `SETTINGS_SCHEMA` なしの `cargo build` | `demo/schema.toml` — スタンドアロン開発用フォールバック     |
+ビルドレシピは **`just`** で定義されています（ルート [Justfile](Justfile)、デモは [demo/Justfile](demo/Justfile)）。
+
+| 場面 | 使用されるスキーマ |
+| ---- | ------------------ |
+| `just binary`（上書きなし） | `../schema.toml` — クレートルートの一階層上，親アプリのスキーマ |
+| `SCHEMA=/path/to/schema.toml just binary` | 指定パス |
+| `SETTINGS_SCHEMA=/path just binary` | 指定パス（優先） |
+| `SETTINGS_SCHEMA` なしの `cargo build` | `demo/schema.toml` — スタンドアロン開発用フォールバック |
+
+### ルート Justfile（同梱 + checker）
 
 ```bash
 cd settings
 
 # 初回 / アイコンスタイル変更時
-make icons                          # Material Symbols をダウンロード（rounded）
-make icons ICON_STYLE=outlined      # バリアント: rounded / outlined / sharp
+just icons
+ICON_STYLE=outlined just icons          # rounded / outlined / sharp
 
 # 親アプリ同梱用バイナリ（現在のアーキテクチャ）
-make binary
-make SCHEMA=/path/to/schema.toml binary
+just binary
+SCHEMA=/path/to/schema.toml just binary
 
 # スキーマ検証のみ（GUI はビルドしない）
-make check-schema
+just check-schema
+SCHEMA=./demo/schema.toml just check-schema
 
-# スタンドアロン配布物（本番スキーマ）
-make settings-arm64                 # macOS .app → dist/settings/darwin-arm64/
-make settings-win                   # Windows .exe → dist/settings/windows-x86_64/
-make settings-linux                 # Linux バイナリ → dist/settings/linux-x86_64/
+# スタンドアロン配布物（本番スキーマ・任意）
+just settings-darwin-build-arm64        # → dist/settings/darwin-arm64/
+just settings-win-build                 # → dist/settings/windows-x86_64/
+just settings-linux-build               # → dist/settings/linux-x86_64/
 
 # スキーマ検証 CLI（スキーマは埋め込まない）
-make settings-schema-checker-arm64  # → dist/settings-schema-checker/darwin-arm64/
+just checker-darwin-build-arm64         # → dist/settings-schema-checker/darwin-arm64/
+just checker-linux-release              # zip + .deb
 
-# デモ GUI（demo/schema.toml）— demo/Makefile を参照
-cd demo && make demo-arm64
-
-make clean
+just clean
 ```
 
-出力先：
+### デモ Justfile（`demo/`）
+
+ウィジェット試験用スタンドアロン GUI（`demo/schema.toml` 埋め込み，`config.toml` 同梱）。
+
+```bash
+cd demo
+
+just dev                                # 現在の PF 向け未署名ビルド
+just darwin-build-arm64                 # macOS .app → dist/darwin-arm64/
+just linux-release                      # zip + .deb + AppImage
+just win-zip                            # Windows .exe + config.toml
+```
+
+### 出力先
 
 | パス | 説明 |
 | ---- | ---- |
@@ -144,6 +161,14 @@ make clean
 | `demo/dist/<arch>/` | `config.toml` 同梱のデモ GUI |
 
 ARCH slug: `darwin-arm64`, `darwin-x86_64`, `windows-x86_64`, `linux-x86_64`。
+
+### GitHub Releases
+
+`v*` タグの push（または **Release** ワークフローの手動実行）で，**checker** と **demo**
+を Linux（`ubuntu-24.04`）・macOS（arm64 + x86_64，署名・公証済み）・Windows（未署名 zip）
+向けにビルドして draft release に添付します。詳細は [`.github/workflows/release.yml`](.github/workflows/release.yml)。
+
+移行期間中，旧 `Makefile` ターゲット名は Justfile 内の非推奨エイリアスとして残っています。新規作業は `just` を使用してください。
 
 ## ドキュメント
 

@@ -1,0 +1,225 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: extractions/setup-just@v2
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libssl-dev \
+            libwayland-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev \
+            libxi-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libx11-dev \
+            zip \
+            fuse \
+            libfuse2
+
+      - name: Install nfpm
+        run: |
+          curl -fsSL \
+            https://github.com/goreleaser/nfpm/releases/download/v2.41.1/nfpm_2.41.1_amd64.deb \
+            -o /tmp/nfpm.deb
+          sudo dpkg -i /tmp/nfpm.deb
+
+      - name: Install AppImage tools
+        run: |
+          curl -fsSL -o /tmp/linuxdeploy \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o /tmp/appimagetool \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /tmp/linuxdeploy /tmp/appimagetool
+          echo "LINUXDEPLOY=/tmp/linuxdeploy" >> "$GITHUB_ENV"
+          echo "APPIMAGETOOL=/tmp/appimagetool" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-linux-${{ hashFiles('Cargo.lock', 'settings-schema/Cargo.lock') }}
+          restore-keys: cargo-linux-
+
+      - name: Build checker and demo (Linux)
+        run: |
+          just checker-linux-release
+          just -f demo/Justfile linux-release
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/settings-schema-checker/settings-schema-checker-v*-linux-x86_64.zip
+            dist/settings-schema-checker/settings-schema-checker-v*-linux-x86_64.deb
+            demo/dist/Settings-v*-linux-x86_64.zip
+            demo/dist/settings-demo-v*-linux-x86_64.deb
+            demo/dist/Settings-v*-linux-x86_64.AppImage
+
+  macos:
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    env:
+      APPLE_DEVELOPER_CERTIFICATE_NAME: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_NAME }}
+      APPLE_DEVELOPER_TEAM_ID: ${{ secrets.APPLE_DEVELOPER_TEAM_ID }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_DEVELOPER_APP_PASSWORD: ${{ secrets.APPLE_DEVELOPER_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: extractions/setup-just@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install dmgbuild
+        run: pip install dmgbuild
+
+      - name: Import code signing certificate
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/app-signing.keychain-db"
+          security create-keychain -p "" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "" "$KEYCHAIN"
+          echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" "$KEYCHAIN"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-macos-${{ matrix.arch }}-${{ hashFiles('Cargo.lock', 'settings-schema/Cargo.lock') }}
+          restore-keys: cargo-macos-${{ matrix.arch }}-
+
+      - name: Build checker and demo (macOS ${{ matrix.arch }})
+        run: |
+          just checker-darwin-notarize-${{ matrix.arch }}
+          just -f demo/Justfile darwin-notarize-${{ matrix.arch }}
+
+      - name: Upload macOS packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-packages
+          path: |
+            dist/settings-schema-checker/settings-schema-checker-v*-darwin-${{ matrix.arch }}.zip
+            demo/dist/Settings-v*-darwin-${{ matrix.arch }}.dmg
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: extractions/setup-just@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install ImageMagick
+        run: choco install imagemagick -y
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-windows-${{ hashFiles('Cargo.lock', 'settings-schema/Cargo.lock') }}
+          restore-keys: cargo-windows-
+
+      - name: Build checker and demo (Windows)
+        shell: bash
+        run: |
+          just checker-win-zip
+          just -f demo/Justfile win-zip
+
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: |
+            dist/settings-schema-checker/settings-schema-checker-v*-windows-x86_64.zip
+            demo/dist/Settings-v*-windows-x86_64.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Resolve version
+        run: |
+          VERSION="$(awk -F'"' '/^version *=/{print $2; exit}' Cargo.toml)"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          test "${GITHUB_REF_NAME#v}" = "$VERSION"
+
+      - name: Prepare release notes
+        run: |
+          {
+            echo "## Settings ${GITHUB_REF_NAME}"
+            echo ""
+            echo "### Linux (x86_64)"
+            echo "- \`settings-schema-checker-v${VERSION}-linux-x86_64.zip\` / \`.deb\`"
+            echo "- \`Settings-v${VERSION}-linux-x86_64.zip\` — demo GUI"
+            echo "- \`settings-demo-v${VERSION}-linux-x86_64.deb\`"
+            echo "- \`Settings-v${VERSION}-linux-x86_64.AppImage\`"
+            echo ""
+            echo "### macOS"
+            echo "- checker: notarized \`.zip\` (arm64 + x86_64)"
+            echo "- demo: notarized \`.dmg\` (arm64 + x86_64)"
+            echo ""
+            echo "### Windows (x86_64)"
+            echo "- checker + demo \`.zip\` (unsigned)"
+          } > release-body.md
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          body_path: release-body.md
+          files: artifacts/**/*
