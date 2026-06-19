@@ -338,7 +338,11 @@ checker-linux-deb: checker-linux-build
         -f packaging/checker-nfpm.yaml \
         --packager deb \
         --target "{{dist_checker}}"
-    echo ">>> Package: {{dist_checker}}/{{checker_name}}-v{{version}}-linux-x86_64.deb"
+    DEB="{{dist_checker}}/{{checker_name}}-v{{version}}-linux-x86_64.deb"
+    GENERATED="{{dist_checker}}/{{checker_name}}_{{version}}_amd64.deb"
+    rm -f "${DEB}"
+    mv "${GENERATED}" "${DEB}"
+    echo ">>> Package: ${DEB}"
 
 checker-linux-release: checker-linux-zip checker-linux-deb
 

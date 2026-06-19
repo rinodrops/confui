@@ -131,7 +131,7 @@ win-build: _ensure-icons _ensure-appicon-ico
     SETTINGS_SCHEMA="${SCHEMA}" \
         cargo build --manifest-path ../Cargo.toml --release -p settings
     mkdir -p "{{dist}}/{{arch_win}}"
-    cp "target/release/settings.exe" "{{dist}}/{{arch_win}}/{{app_name}}.exe"
+    cp "../target/release/settings.exe" "{{dist}}/{{arch_win}}/{{app_name}}.exe"
     cp "{{config_path}}" "{{dist}}/{{arch_win}}/config.toml"
     echo ">>> Output: {{dist}}/{{arch_win}}/{{app_name}}.exe"
 
@@ -187,7 +187,11 @@ linux-deb: linux-build
         -f packaging/demo-nfpm.yaml \
         --packager deb \
         --target "{{dist}}"
-    echo ">>> Package: {{dist}}/settings-demo-v{{version}}-linux-x86_64.deb"
+    DEB="{{dist}}/settings-demo-v{{version}}-linux-x86_64.deb"
+    GENERATED="{{dist}}/settings-demo_{{version}}_amd64.deb"
+    rm -f "${DEB}"
+    mv "${GENERATED}" "${DEB}"
+    echo ">>> Package: ${DEB}"
 
 linux-appimage: linux-build
     #!/usr/bin/env bash
