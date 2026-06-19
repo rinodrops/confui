@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Settings Demo
+Comment=Settings widget demonstration
+Exec=settings-demo
+Icon=settings-demo
+Type=Application
+Categories=Utility;
+Terminal=false

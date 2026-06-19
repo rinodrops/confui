@@ -1,6 +1,8 @@
 # ============================================================
 # Settings — demo build targets
 # ============================================================
+# DEPRECATED: use Justfile instead (`just --list`).
+# This file remains during the migration period.
 # Standalone demo GUI (demo/schema.toml embedded). No checker.
 #
 # Usage:
@@ -8,6 +10,7 @@
 #   make demo-x86_64     — macOS .app (Intel)
 #   make demo-win        — Windows .exe + config.toml
 #   make demo-linux      — Linux binary + config.toml
+#   make demo-zip-linux  — Linux zip (settings + config.toml)
 #   make demo-dmg-arm64  — distributable DMG
 #
 # Prerequisites:
@@ -53,6 +56,7 @@ APP_DMG_X86   := $(DIST)/$(APP_NAME)-v$(VERSION)-darwin-x86_64.dmg
 WIN_EXE   := $(DIST)/$(ARCH_WIN)/$(APP_NAME).exe
 WIN_ZIP   := $(DIST)/$(APP_NAME)-v$(VERSION)-windows-x86_64.zip
 LINUX_BIN := $(DIST)/$(ARCH_LINUX)/$(EXE_NAME)
+APP_ZIP_LINUX := $(DIST)/$(APP_NAME)-v$(VERSION)-linux-x86_64.zip
 
 DMG_SETTINGS := dmg_settings.py
 ICON_SRC_MACOS := assets/appicon-macos.png
@@ -67,7 +71,7 @@ ICON_TTF    := ../assets/icons.ttf
 APPICON_ICO := ../assets/appicon.ico
 
 .PHONY: all demo-arm64 demo-x86_64 demo-win demo-linux \
-	demo-zip-arm64 demo-zip-x86_64 demo-zip-win \
+	demo-zip-arm64 demo-zip-x86_64 demo-zip-win demo-zip-linux \
 	demo-dmg-arm64 demo-dmg-x86_64 sign-arm64 sign-x86_64 \
 	notarize-arm64 notarize-x86_64 clean help \
 	_mac_demo_app _plist _icns_if_present _icns_build \
@@ -151,6 +155,12 @@ demo-zip-win: demo-win
 		zip "../../$(notdir $(WIN_ZIP))" "$(APP_NAME).exe" config.toml
 	@echo ">>> Package: $(WIN_ZIP)"
 
+demo-zip-linux: demo-linux
+	@rm -f "$(APP_ZIP_LINUX)"
+	cd "$(DIST)/$(ARCH_LINUX)" && \
+		zip "../../$(notdir $(APP_ZIP_LINUX))" "$(EXE_NAME)" config.toml
+	@echo ">>> Package: $(APP_ZIP_LINUX)"
+
 demo-dmg-arm64: demo-arm64
 	@command -v dmgbuild >/dev/null 2>&1 || (echo "Error: dmgbuild not found. Run: pipx install dmgbuild" && exit 1)
 	dmgbuild -s "$(DMG_SETTINGS)" -D app="$(APP_ARM64)" "$(APP_NAME)" "$(APP_DMG_ARM64)"
@@ -216,6 +226,7 @@ mac: demo-arm64
 win: demo-win
 linux: demo-linux
 win-zip: demo-zip-win
+linux-zip: demo-zip-linux
 mac-zip: demo-zip-arm64
 mac-dmg: demo-dmg-arm64
 sign: sign-arm64

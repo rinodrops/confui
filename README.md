@@ -50,11 +50,11 @@ min    = 1
 max    = 65535
 ```
 
-**2. Build:**
+**2. Build** (requires [just](https://github.com/casey/just)):
 
 ```bash
 cd settings
-SETTINGS_SCHEMA=/path/to/your/schema.toml make
+SETTINGS_SCHEMA=/path/to/your/schema.toml just binary
 ```
 
 **3. Launch from your app:**
@@ -96,45 +96,62 @@ Place `Settings.exe` in the same directory as your executable and install both t
 members = ["myapp", "settings"]
 ```
 
-Point the schema via `SETTINGS_SCHEMA` when building. The `make` default is `../schema.toml` (the parent app's schema, one level up from the crate root). When building directly with `cargo build` without `SETTINGS_SCHEMA`, the fallback is `demo/schema.toml`.
+Point the schema via `SETTINGS_SCHEMA` when building. The default schema path for `just binary` is `../schema.toml` (the parent app's schema, one level up from the crate root). When building directly with `cargo build` without `SETTINGS_SCHEMA`, the fallback is `demo/schema.toml`.
 
 ## Build
 
-| Scenario                              | Schema used                                                         |
-| ------------------------------------- | ------------------------------------------------------------------- |
-| `make` (no override)                  | `../schema.toml` — parent app's schema, one level up from the crate root |
-| `make SCHEMA=/path/to/schema.toml`    | the specified path                                                  |
-| `cargo build` without `SETTINGS_SCHEMA` | `demo/schema.toml` — standalone dev fallback                        |
+Build recipes live in **`just`** ([Justfile](Justfile) at the repo root; [demo/Justfile](demo/Justfile) for the demo app).
+
+| Scenario | Schema used |
+| -------- | ----------- |
+| `just binary` (no override) | `../schema.toml` — parent app's schema, one level up from the crate root |
+| `SCHEMA=/path/to/schema.toml just binary` | the specified path |
+| `SETTINGS_SCHEMA=/path just binary` | the specified path (takes precedence) |
+| `cargo build` without `SETTINGS_SCHEMA` | `demo/schema.toml` — standalone dev fallback |
+
+### Root Justfile (embed + checker)
 
 ```bash
 cd settings
 
 # First run / when changing icon style
-make icons                          # Download Material Symbols (rounded)
-make icons ICON_STYLE=outlined      # Variants: rounded / outlined / sharp
+just icons
+ICON_STYLE=outlined just icons          # rounded / outlined / sharp
 
 # Parent-app binary (current arch)
-make binary
-make SCHEMA=/path/to/schema.toml binary
+just binary
+SCHEMA=/path/to/schema.toml just binary
 
 # Schema validation only (no GUI build)
-make check-schema
+just check-schema
+SCHEMA=./demo/schema.toml just check-schema
 
-# Standalone distribution (production schema)
-make settings-arm64                 # macOS .app → dist/settings/darwin-arm64/
-make settings-win                   # Windows .exe → dist/settings/windows-x86_64/
-make settings-linux                 # Linux binary → dist/settings/linux-x86_64/
+# Standalone production GUI (optional; parent-app bundling is the primary use)
+just settings-darwin-build-arm64        # → dist/settings/darwin-arm64/
+just settings-win-build                 # → dist/settings/windows-x86_64/
+just settings-linux-build               # → dist/settings/linux-x86_64/
 
 # Schema checker CLI (no embedded schema)
-make settings-schema-checker-arm64  # → dist/settings-schema-checker/darwin-arm64/
+just checker-darwin-build-arm64         # → dist/settings-schema-checker/darwin-arm64/
+just checker-linux-release              # zip + .deb
 
-# Demo GUI (demo/schema.toml); see demo/Makefile
-cd demo && make demo-arm64
-
-make clean
+just clean
 ```
 
-Output:
+### Demo Justfile (`demo/`)
+
+Standalone widget showcase (`demo/schema.toml` embedded, `config.toml` bundled).
+
+```bash
+cd demo
+
+just dev                                # unsigned build for the current platform
+just darwin-build-arm64                 # macOS .app → dist/darwin-arm64/
+just linux-release                      # zip + .deb + AppImage
+just win-zip                            # Windows .exe + config.toml
+```
+
+### Output layout
 
 | Path | Description |
 | ---- | ----------- |
@@ -144,6 +161,14 @@ Output:
 | `demo/dist/<arch>/` | Standalone demo GUI with bundled `config.toml` |
 
 ARCH slugs: `darwin-arm64`, `darwin-x86_64`, `windows-x86_64`, `linux-x86_64`.
+
+### GitHub Releases
+
+Pushing a `v*` tag (or running the **Release** workflow manually) builds and publishes
+**checker** and **demo** packages for Linux (`ubuntu-24.04`), macOS (arm64 + x86_64,
+signed and notarized), and Windows (unsigned zip). See [`.github/workflows/release.yml`](.github/workflows/release.yml).
+
+Legacy `Makefile` targets remain as deprecated aliases during the migration; prefer `just`.
 
 ## Documentation
 
