@@ -15,9 +15,11 @@ icon_locations = {
 }
 
 # Background image (1320x800 @2x for Retina, logical window 660x400).
-# Path is relative to this dmg_settings.py file (in demo/).
-_dir = os.path.dirname(os.path.abspath(__file__))
-background = os.path.join(_dir, 'assets', 'dmg-background.png')
+# dmgbuild loads this file via exec(), so __file__ is unavailable; pass demo_dir
+# from the Justfile (-D demo_dir=...).
+_demo_dir = defines.get('demo_dir', 'demo')
+_bg = os.path.join(_demo_dir, 'assets', 'dmg-background.png')
+background = _bg if os.path.isfile(_bg) else None
 
 # Finder window appearance
 show_status_bar  = False
