@@ -368,28 +368,28 @@ checker-darwin-sign-x86_64: checker-darwin-build-x86_64
 
 checker-darwin-notarize-arm64: checker-darwin-sign-arm64
     just _require-notarize-env
-    just _checker-darwin-zip-arm64
     xcrun notarytool submit \
-        "{{dist_checker}}/{{checker_name}}-v{{version}}-darwin-arm64.zip" \
+        "{{dist_checker}}/{{arch_darwin_arm64}}/{{checker_name}}" \
         --apple-id "${APPLE_ID}" \
         --password "${APPLE_DEVELOPER_APP_PASSWORD}" \
         --team-id "${APPLE_DEVELOPER_TEAM_ID}" \
         --wait
     xcrun stapler staple \
-        "{{dist_checker}}/{{checker_name}}-v{{version}}-darwin-arm64.zip"
+        "{{dist_checker}}/{{arch_darwin_arm64}}/{{checker_name}}"
+    just _checker-darwin-zip-arm64
     @echo ">>> Notarized: {{dist_checker}}/{{checker_name}}-v{{version}}-darwin-arm64.zip"
 
 checker-darwin-notarize-x86_64: checker-darwin-sign-x86_64
     just _require-notarize-env
-    just _checker-darwin-zip-x86_64
     xcrun notarytool submit \
-        "{{dist_checker}}/{{checker_name}}-v{{version}}-darwin-x86_64.zip" \
+        "{{dist_checker}}/{{arch_darwin_x86}}/{{checker_name}}" \
         --apple-id "${APPLE_ID}" \
         --password "${APPLE_DEVELOPER_APP_PASSWORD}" \
         --team-id "${APPLE_DEVELOPER_TEAM_ID}" \
         --wait
     xcrun stapler staple \
-        "{{dist_checker}}/{{checker_name}}-v{{version}}-darwin-x86_64.zip"
+        "{{dist_checker}}/{{arch_darwin_x86}}/{{checker_name}}"
+    just _checker-darwin-zip-x86_64
     @echo ">>> Notarized: {{dist_checker}}/{{checker_name}}-v{{version}}-darwin-x86_64.zip"
 
 # Makefile aliases (deprecated)
