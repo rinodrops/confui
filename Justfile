@@ -512,22 +512,22 @@ _darwin-icns-if-present icon_src res_dir icns_out:
     fi
 
 # Usage: just _darwin-icns-build icon.png out.icns [iconset_dir]
-_darwin-icns-build icon_src icns_out iconset="{{iconset}}":
+_darwin-icns-build icon_src icns_out iconset_dir=iconset:
     #!/usr/bin/env bash
     set -euo pipefail
-    mkdir -p "{{iconset}}"
-    sips -z 16   16   "{{icon_src}}" --out "{{iconset}}/icon_16x16.png"      >/dev/null
-    sips -z 32   32   "{{icon_src}}" --out "{{iconset}}/icon_16x16@2x.png"   >/dev/null
-    sips -z 32   32   "{{icon_src}}" --out "{{iconset}}/icon_32x32.png"      >/dev/null
-    sips -z 64   64   "{{icon_src}}" --out "{{iconset}}/icon_32x32@2x.png"   >/dev/null
-    sips -z 128  128  "{{icon_src}}" --out "{{iconset}}/icon_128x128.png"    >/dev/null
-    sips -z 256  256  "{{icon_src}}" --out "{{iconset}}/icon_128x128@2x.png" >/dev/null
-    sips -z 256  256  "{{icon_src}}" --out "{{iconset}}/icon_256x256.png"    >/dev/null
-    sips -z 512  512  "{{icon_src}}" --out "{{iconset}}/icon_256x256@2x.png" >/dev/null
-    sips -z 512  512  "{{icon_src}}" --out "{{iconset}}/icon_512x512.png"    >/dev/null
-    sips -z 1024 1024 "{{icon_src}}" --out "{{iconset}}/icon_512x512@2x.png" >/dev/null
-    iconutil -c icns "{{iconset}}" -o "{{icns_out}}"
-    rm -rf "{{iconset}}"
+    mkdir -p "{{iconset_dir}}"
+    sips -z 16   16   "{{icon_src}}" --out "{{iconset_dir}}/icon_16x16.png"      >/dev/null
+    sips -z 32   32   "{{icon_src}}" --out "{{iconset_dir}}/icon_16x16@2x.png"   >/dev/null
+    sips -z 32   32   "{{icon_src}}" --out "{{iconset_dir}}/icon_32x32.png"      >/dev/null
+    sips -z 64   64   "{{icon_src}}" --out "{{iconset_dir}}/icon_32x32@2x.png"   >/dev/null
+    sips -z 128  128  "{{icon_src}}" --out "{{iconset_dir}}/icon_128x128.png"    >/dev/null
+    sips -z 256  256  "{{icon_src}}" --out "{{iconset_dir}}/icon_128x128@2x.png" >/dev/null
+    sips -z 256  256  "{{icon_src}}" --out "{{iconset_dir}}/icon_256x256.png"    >/dev/null
+    sips -z 512  512  "{{icon_src}}" --out "{{iconset_dir}}/icon_256x256@2x.png" >/dev/null
+    sips -z 512  512  "{{icon_src}}" --out "{{iconset_dir}}/icon_512x512.png"    >/dev/null
+    sips -z 1024 1024 "{{icon_src}}" --out "{{iconset_dir}}/icon_512x512@2x.png" >/dev/null
+    iconutil -c icns "{{iconset_dir}}" -o "{{icns_out}}"
+    rm -rf "{{iconset_dir}}"
 
 _require-dmgbuild:
     #!/usr/bin/env bash

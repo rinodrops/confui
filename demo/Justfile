@@ -325,7 +325,8 @@ _darwin-bundle arch_slug rust_target:
     cp "../target/{{rust_target}}/release/{{exe_name}}" "${APP}/Contents/MacOS/{{app_name}}"
     cp "${CONFIG}" "${APP}/Contents/Resources/config.toml"
     just --justfile {{root_just}} _darwin-write-plist "${APP}/Contents" jp.emotiongraphics.settings
-    just --justfile {{root_just}} _darwin-icns-if-present "{{icon_src_macos}}" \
+    just --justfile {{root_just}} _darwin-icns-if-present \
+        "{{justfile_directory()}}/{{icon_src_macos}}" \
         "${APP}/Contents/Resources" \
         "${APP}/Contents/Resources/AppIcon.icns"
 
