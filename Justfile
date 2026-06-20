@@ -370,6 +370,7 @@ checker-darwin-notarize-arm64: checker-darwin-sign-arm64
     just _require-notarize-env
     xcrun notarytool submit \
         "{{dist_checker}}/{{arch_darwin_arm64}}/{{checker_name}}" \
+        --force \
         --apple-id "${APPLE_ID}" \
         --password "${APPLE_DEVELOPER_APP_PASSWORD}" \
         --team-id "${APPLE_DEVELOPER_TEAM_ID}" \
@@ -383,6 +384,7 @@ checker-darwin-notarize-x86_64: checker-darwin-sign-x86_64
     just _require-notarize-env
     xcrun notarytool submit \
         "{{dist_checker}}/{{arch_darwin_x86}}/{{checker_name}}" \
+        --force \
         --apple-id "${APPLE_ID}" \
         --password "${APPLE_DEVELOPER_APP_PASSWORD}" \
         --team-id "${APPLE_DEVELOPER_TEAM_ID}" \
