@@ -530,7 +530,9 @@ _darwin-icns-build icon_src icns_out:
     sips -z 512  512  "${SRC_NORM}" --out "${ICONSET}/icon_256x256@2x.png"
     sips -z 512  512  "${SRC_NORM}" --out "${ICONSET}/icon_512x512.png"
     cp "${SRC_NORM}" "${ICONSET}/icon_512x512@2x.png"
-    iconutil -c icns "${ICONSET}" -o "{{icns_out}}"
+    mkdir -p "$(dirname "{{icns_out}}")"
+    ICNS_OUT_ABS="$(cd "$(dirname "{{icns_out}}")" && pwd)/$(basename "{{icns_out}}")"
+    iconutil -c icns "${ICONSET}" -o "${ICNS_OUT_ABS}"
     rm -rf "${ICONSET_WORK}"
 
 _require-dmgbuild:
