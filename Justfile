@@ -140,7 +140,7 @@ settings-win-zip: settings-win-build
     set -euo pipefail
     ZIP="{{dist_settings}}/{{app_name}}-v{{version}}-windows-x86_64.zip"
     rm -f "${ZIP}"
-    cd "{{dist_settings}}/{{arch_win}}" && zip "../../$(basename "${ZIP}")" "{{app_name}}.exe"
+    cd "{{dist_settings}}/{{arch_win}}" && zip "../$(basename "${ZIP}")" "{{app_name}}.exe"
     echo ">>> Package: ${ZIP}"
 
 settings-darwin-zip-arm64: settings-darwin-build-arm64
@@ -293,23 +293,29 @@ checker-linux-build:
         "{{dist_checker}}/{{arch_linux}}/{{checker_name}}"
     @echo ">>> Output: {{dist_checker}}/{{arch_linux}}/{{checker_name}}"
 
-checker-darwin-zip-arm64: checker-darwin-build-arm64
+_checker-darwin-zip-arm64:
     #!/usr/bin/env bash
     set -euo pipefail
     ZIP="{{dist_checker}}/{{checker_name}}-v{{version}}-darwin-arm64.zip"
     rm -f "${ZIP}"
     cd "{{dist_checker}}/{{arch_darwin_arm64}}" && \
-        zip "../../$(basename "${ZIP}")" "{{checker_name}}"
+        zip "../$(basename "${ZIP}")" "{{checker_name}}"
     echo ">>> Package: ${ZIP}"
 
-checker-darwin-zip-x86_64: checker-darwin-build-x86_64
+_checker-darwin-zip-x86_64:
     #!/usr/bin/env bash
     set -euo pipefail
     ZIP="{{dist_checker}}/{{checker_name}}-v{{version}}-darwin-x86_64.zip"
     rm -f "${ZIP}"
     cd "{{dist_checker}}/{{arch_darwin_x86}}" && \
-        zip "../../$(basename "${ZIP}")" "{{checker_name}}"
+        zip "../$(basename "${ZIP}")" "{{checker_name}}"
     echo ">>> Package: ${ZIP}"
+
+checker-darwin-zip-arm64: checker-darwin-build-arm64
+    just _checker-darwin-zip-arm64
+
+checker-darwin-zip-x86_64: checker-darwin-build-x86_64
+    just _checker-darwin-zip-x86_64
 
 checker-win-zip: checker-win-build
     #!/usr/bin/env bash
@@ -317,7 +323,7 @@ checker-win-zip: checker-win-build
     ZIP="{{dist_checker}}/{{checker_name}}-v{{version}}-windows-x86_64.zip"
     rm -f "${ZIP}"
     cd "{{dist_checker}}/{{arch_win}}" && \
-        zip "../../$(basename "${ZIP}")" "{{checker_name}}.exe"
+        zip "../$(basename "${ZIP}")" "{{checker_name}}.exe"
     echo ">>> Package: ${ZIP}"
 
 checker-linux-zip: checker-linux-build
@@ -326,7 +332,7 @@ checker-linux-zip: checker-linux-build
     ZIP="{{dist_checker}}/{{checker_name}}-v{{version}}-linux-x86_64.zip"
     rm -f "${ZIP}"
     cd "{{dist_checker}}/{{arch_linux}}" && \
-        zip "../../$(basename "${ZIP}")" "{{checker_name}}"
+        zip "../$(basename "${ZIP}")" "{{checker_name}}"
     echo ">>> Package: ${ZIP}"
 
 checker-linux-deb: checker-linux-build
@@ -362,7 +368,7 @@ checker-darwin-sign-x86_64: checker-darwin-build-x86_64
 
 checker-darwin-notarize-arm64: checker-darwin-sign-arm64
     just _require-notarize-env
-    just checker-darwin-zip-arm64
+    just _checker-darwin-zip-arm64
     xcrun notarytool submit \
         "{{dist_checker}}/{{checker_name}}-v{{version}}-darwin-arm64.zip" \
         --apple-id "${APPLE_ID}" \
@@ -375,7 +381,7 @@ checker-darwin-notarize-arm64: checker-darwin-sign-arm64
 
 checker-darwin-notarize-x86_64: checker-darwin-sign-x86_64
     just _require-notarize-env
-    just checker-darwin-zip-x86_64
+    just _checker-darwin-zip-x86_64
     xcrun notarytool submit \
         "{{dist_checker}}/{{checker_name}}-v{{version}}-darwin-x86_64.zip" \
         --apple-id "${APPLE_ID}" \
