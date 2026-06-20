@@ -468,7 +468,6 @@ _settings-darwin-bundle arch_slug rust_target:
     cp "target/{{rust_target}}/release/{{exe_name}}" "${APP}/Contents/MacOS/{{app_name}}"
     just _darwin-write-plist "${APP}/Contents" jp.emotiongraphics.settings
     just _darwin-icns-if-present "{{icon_src}}" \
-        "${APP}/Contents/Resources" \
         "${APP}/Contents/Resources/AppIcon.icns"
 
 # Usage: just _darwin-write-plist path/to/Contents [plist_bundle_id]
@@ -502,8 +501,8 @@ _darwin-write-plist contents_dir plist_bundle_id="jp.emotiongraphics.settings":
         -e "s/MIN_MACOS_PLACEHOLDER/{{min_macos}}/" \
         "{{contents_dir}}/Info.plist"
 
-# Usage: just _darwin-icns-if-present icon.png Resources/dir out.icns
-_darwin-icns-if-present icon_src res_dir icns_out:
+# Usage: just _darwin-icns-if-present icon.png out.icns
+_darwin-icns-if-present icon_src icns_out:
     #!/usr/bin/env bash
     if [ -f "{{icon_src}}" ]; then
         just _darwin-icns-build "{{icon_src}}" "{{icns_out}}"
@@ -511,23 +510,25 @@ _darwin-icns-if-present icon_src res_dir icns_out:
         echo "Note: {{icon_src}} not found — skipping icon generation."
     fi
 
-# Usage: just _darwin-icns-build icon.png out.icns [iconset_dir]
-_darwin-icns-build icon_src icns_out iconset_dir=iconset:
+# Usage: just _darwin-icns-build icon.png out.icns
+_darwin-icns-build icon_src icns_out:
     #!/usr/bin/env bash
     set -euo pipefail
-    mkdir -p "{{iconset_dir}}"
-    sips -z 16   16   "{{icon_src}}" --out "{{iconset_dir}}/icon_16x16.png"      >/dev/null
-    sips -z 32   32   "{{icon_src}}" --out "{{iconset_dir}}/icon_16x16@2x.png"   >/dev/null
-    sips -z 32   32   "{{icon_src}}" --out "{{iconset_dir}}/icon_32x32.png"      >/dev/null
-    sips -z 64   64   "{{icon_src}}" --out "{{iconset_dir}}/icon_32x32@2x.png"   >/dev/null
-    sips -z 128  128  "{{icon_src}}" --out "{{iconset_dir}}/icon_128x128.png"    >/dev/null
-    sips -z 256  256  "{{icon_src}}" --out "{{iconset_dir}}/icon_128x128@2x.png" >/dev/null
-    sips -z 256  256  "{{icon_src}}" --out "{{iconset_dir}}/icon_256x256.png"    >/dev/null
-    sips -z 512  512  "{{icon_src}}" --out "{{iconset_dir}}/icon_256x256@2x.png" >/dev/null
-    sips -z 512  512  "{{icon_src}}" --out "{{iconset_dir}}/icon_512x512.png"    >/dev/null
-    sips -z 1024 1024 "{{icon_src}}" --out "{{iconset_dir}}/icon_512x512@2x.png" >/dev/null
-    iconutil -c icns "{{iconset_dir}}" -o "{{icns_out}}"
-    rm -rf "{{iconset_dir}}"
+    ICONSET_WORK="$(mktemp -d)"
+    ICONSET="${ICONSET_WORK}/AppIcon.iconset"
+    mkdir -p "${ICONSET}"
+    sips -z 16   16   "{{icon_src}}" --out "${ICONSET}/icon_16x16.png"
+    sips -z 32   32   "{{icon_src}}" --out "${ICONSET}/icon_16x16@2x.png"
+    sips -z 32   32   "{{icon_src}}" --out "${ICONSET}/icon_32x32.png"
+    sips -z 64   64   "{{icon_src}}" --out "${ICONSET}/icon_32x32@2x.png"
+    sips -z 128  128  "{{icon_src}}" --out "${ICONSET}/icon_128x128.png"
+    sips -z 256  256  "{{icon_src}}" --out "${ICONSET}/icon_128x128@2x.png"
+    sips -z 256  256  "{{icon_src}}" --out "${ICONSET}/icon_256x256.png"
+    sips -z 512  512  "{{icon_src}}" --out "${ICONSET}/icon_256x256@2x.png"
+    sips -z 512  512  "{{icon_src}}" --out "${ICONSET}/icon_512x512.png"
+    sips -z 1024 1024 "{{icon_src}}" --out "${ICONSET}/icon_512x512@2x.png"
+    iconutil -c icns "${ICONSET}" -o "{{icns_out}}"
+    rm -rf "${ICONSET_WORK}"
 
 _require-dmgbuild:
     #!/usr/bin/env bash
