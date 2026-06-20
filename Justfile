@@ -161,8 +161,17 @@ settings-win-build: _ensure-icon-font _ensure-appicon-ico
     echo ">>> Output: {{dist_settings}}/{{arch_win}}/{{app_name}}.exe"
 
 [linux]
-settings-win-build:
-    @echo "Error: Windows cross-compile requires a macOS host" && exit 1
+settings-win-build: _ensure-icon-font _ensure-appicon-ico
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ABS_SCHEMA="$(just _abs-schema)"
+    echo ">>> Building Settings .exe  (schema: ${ABS_SCHEMA})"
+    SETTINGS_SCHEMA="${ABS_SCHEMA}" CARGO_TARGET_DIR="{{win_target_dir}}" \
+        cargo build --release -p settings --target {{win_target}}
+    mkdir -p "{{dist_settings}}/{{arch_win}}"
+    cp "{{win_target_dir}}/{{win_target}}/release/settings.exe" \
+        "{{dist_settings}}/{{arch_win}}/{{app_name}}.exe"
+    echo ">>> Output: {{dist_settings}}/{{arch_win}}/{{app_name}}.exe"
 
 [windows]
 settings-win-build: _ensure-icon-font _ensure-appicon-ico
