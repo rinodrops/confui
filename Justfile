@@ -98,6 +98,24 @@ binary: _ensure-icon-font
     SETTINGS_SCHEMA="${ABS_SCHEMA}" cargo build --release -p settings
     echo ">>> Output: target/release/{{exe_name}}"
 
+binary-arm64: _ensure-icon-font
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ABS_SCHEMA="$(just _abs-schema)"
+    echo ">>> Building embed binary  (arch: arm64, schema: ${ABS_SCHEMA})"
+    MACOSX_DEPLOYMENT_TARGET="{{min_macos}}" SETTINGS_SCHEMA="${ABS_SCHEMA}" \
+        cargo build --release -p settings --target {{rust_target_arm64}}
+    echo ">>> Output: target/{{rust_target_arm64}}/release/{{exe_name}}"
+
+binary-x86_64: _ensure-icon-font
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ABS_SCHEMA="$(just _abs-schema)"
+    echo ">>> Building embed binary  (arch: x86_64, schema: ${ABS_SCHEMA})"
+    MACOSX_DEPLOYMENT_TARGET="{{min_macos}}" SETTINGS_SCHEMA="${ABS_SCHEMA}" \
+        cargo build --release -p settings --target {{rust_target_x86}}
+    echo ">>> Output: target/{{rust_target_x86}}/release/{{exe_name}}"
+
 check-schema:
     #!/usr/bin/env bash
     set -euo pipefail
