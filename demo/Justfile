@@ -167,7 +167,7 @@ win-zip: win-build
     set -euo pipefail
     ZIP="{{dist}}/{{app_name}}-v{{version}}-windows-x86_64.zip"
     rm -f "${ZIP}"
-    cd "{{dist}}/{{arch_win}}" && zip "../../$(basename "${ZIP}")" "{{app_name}}.exe" config.toml
+    cd "{{dist}}/{{arch_win}}" && zip "../$(basename "${ZIP}")" "{{app_name}}.exe" config.toml
     echo ">>> Package: ${ZIP}"
 
 linux-zip: linux-build
@@ -175,7 +175,7 @@ linux-zip: linux-build
     set -euo pipefail
     ZIP="{{dist}}/{{app_name}}-v{{version}}-linux-x86_64.zip"
     rm -f "${ZIP}"
-    cd "{{dist}}/{{arch_linux}}" && zip "../../$(basename "${ZIP}")" "{{exe_name}}" config.toml
+    cd "{{dist}}/{{arch_linux}}" && zip "../$(basename "${ZIP}")" "{{exe_name}}" config.toml
     echo ">>> Package: ${ZIP}"
 
 linux-deb: linux-build
