@@ -98,6 +98,24 @@ binary: _ensure-icon-font
     SETTINGS_SCHEMA="${ABS_SCHEMA}" cargo build --release -p settings
     echo ">>> Output: target/release/{{exe_name}}"
 
+binary-arm64: _ensure-icon-font
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ABS_SCHEMA="$(just _abs-schema)"
+    echo ">>> Building embed binary  (arch: arm64, schema: ${ABS_SCHEMA})"
+    MACOSX_DEPLOYMENT_TARGET="{{min_macos}}" SETTINGS_SCHEMA="${ABS_SCHEMA}" \
+        cargo build --release -p settings --target {{rust_target_arm64}}
+    echo ">>> Output: target/{{rust_target_arm64}}/release/{{exe_name}}"
+
+binary-x86_64: _ensure-icon-font
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ABS_SCHEMA="$(just _abs-schema)"
+    echo ">>> Building embed binary  (arch: x86_64, schema: ${ABS_SCHEMA})"
+    MACOSX_DEPLOYMENT_TARGET="{{min_macos}}" SETTINGS_SCHEMA="${ABS_SCHEMA}" \
+        cargo build --release -p settings --target {{rust_target_x86}}
+    echo ">>> Output: target/{{rust_target_x86}}/release/{{exe_name}}"
+
 check-schema:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -508,25 +526,25 @@ _darwin-write-plist contents_dir plist_bundle_id="jp.emotiongraphics.settings":
     set -euo pipefail
     mkdir -p "{{contents_dir}}"
     cat > "{{contents_dir}}/Info.plist" <<'PLIST'
-    <?xml version="1.0" encoding="UTF-8"?>
-    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-    <plist version="1.0">
-    <dict>
-        <key>CFBundleName</key>              <string>Settings</string>
-        <key>CFBundleIdentifier</key>        <string>BUNDLE_ID_PLACEHOLDER</string>
-        <key>CFBundleExecutable</key>        <string>Settings</string>
-        <key>CFBundleVersion</key>           <string>VERSION_PLACEHOLDER</string>
-        <key>CFBundleShortVersionString</key><string>VERSION_PLACEHOLDER</string>
-        <key>CFBundlePackageType</key>       <string>APPL</string>
-        <key>CFBundleDevelopmentRegion</key> <string>en</string>
-        <key>LSMinimumSystemVersion</key>    <string>MIN_MACOS_PLACEHOLDER</string>
-        <key>NSHighResolutionCapable</key>   <true/>
-        <key>NSHumanReadableCopyright</key>  <string>Copyright 2026 eMotionGraphics Inc.</string>
-        <key>CFBundleIconFile</key>          <string>AppIcon</string>
-        <key>LSUIElement</key>               <false/>
-    </dict>
-    </plist>
-    PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>              <string>Settings</string>
+    <key>CFBundleIdentifier</key>        <string>BUNDLE_ID_PLACEHOLDER</string>
+    <key>CFBundleExecutable</key>        <string>Settings</string>
+    <key>CFBundleVersion</key>           <string>VERSION_PLACEHOLDER</string>
+    <key>CFBundleShortVersionString</key><string>VERSION_PLACEHOLDER</string>
+    <key>CFBundlePackageType</key>       <string>APPL</string>
+    <key>CFBundleDevelopmentRegion</key> <string>en</string>
+    <key>LSMinimumSystemVersion</key>    <string>MIN_MACOS_PLACEHOLDER</string>
+    <key>NSHighResolutionCapable</key>   <true/>
+    <key>NSHumanReadableCopyright</key>  <string>Copyright 2026 eMotionGraphics Inc.</string>
+    <key>CFBundleIconFile</key>          <string>AppIcon</string>
+    <key>LSUIElement</key>               <false/>
+</dict>
+</plist>
+PLIST
     sed -i '' \
         -e "s/BUNDLE_ID_PLACEHOLDER/{{plist_bundle_id}}/" \
         -e "s/VERSION_PLACEHOLDER/{{version}}/" \
