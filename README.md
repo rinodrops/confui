@@ -54,6 +54,7 @@ max    = 65535
 
 ```bash
 cd settings
+just init                               # first clone / after icon changes (see below)
 SETTINGS_SCHEMA=/path/to/your/schema.toml just binary
 ```
 
@@ -109,14 +110,39 @@ Build recipes live in **`just`** ([Justfile](Justfile) at the repo root; [demo/J
 | `SETTINGS_SCHEMA=/path just binary` | the specified path (takes precedence) |
 | `cargo build` without `SETTINGS_SCHEMA` | `demo/schema.toml` — standalone dev fallback |
 
+### `just init`
+
+Run **`just init`** after cloning the repo or when icon assets change. It is safe to
+re-run. Build recipes also call `_ensure-*` helpers, so everyday builds work without
+`init`; use it when you want to refresh derived files explicitly (especially before
+committing icon updates).
+
+| Location | Command | What it refreshes |
+| -------- | ------- | ----------------- |
+| Repo root | `just init` | Material icon font (`assets/icons.ttf`), Windows `.ico` from `assets/appicon.png`, optional tool hints |
+| `demo/` | `just init` | Same as root (via demo schema) **plus** `demo/assets/AppIcon.icns` from `appicon-macos.png` on macOS |
+
+`just init` at the repo root uses `SCHEMA` when set; otherwise it falls back to
+`demo/schema.toml` for icon-font download. Override icon style:
+
+```bash
+ICON_STYLE=outlined just init
+SCHEMA=/path/to/schema.toml just init
+```
+
+**macOS demo icon:** the demo `.app` copies committed `demo/assets/AppIcon.icns` when
+present. After replacing `demo/assets/appicon-macos.png`, run `just init` on macOS,
+verify the build, then commit **both** the PNG and `AppIcon.icns`. On Linux/Windows,
+`just init` skips ICNS generation (requires macOS `iconutil`); generate on a Mac or
+commit the `.icns` produced elsewhere.
+
 ### Root Justfile (embed + checker)
 
 ```bash
 cd settings
 
-# First run / when changing icon style
-just icons
-ICON_STYLE=outlined just icons          # rounded / outlined / sharp
+just init                               # first clone / icon or icon_style changes
+ICON_STYLE=outlined just init           # rounded / outlined / sharp
 
 # Parent-app binary (current arch)
 just binary
@@ -145,10 +171,12 @@ Standalone widget showcase (`demo/schema.toml` embedded, `config.toml` bundled).
 ```bash
 cd demo
 
+just init                               # first clone / after changing appicon-macos.png
 just dev                                # unsigned build for the current platform
 just darwin-build-arm64                 # macOS .app → dist/darwin-arm64/
 just linux-release                      # zip + .deb + AppImage
 just win-zip                            # Windows .exe + config.toml
+just release                            # signed macOS + all platform release packages
 ```
 
 ### Output layout

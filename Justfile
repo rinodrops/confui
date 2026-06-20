@@ -1,6 +1,7 @@
 # Settings — embed + checker + standalone production GUI
 #
 # Usage:
+#   just init                  — refresh derived assets (run after clone / icon changes)
 #   just binary                         — release binary for parent-app bundling
 #   just check-schema                   — validate schema without building the GUI
 #   just settings-darwin-build-arm64    — production .app → dist/settings/
@@ -53,6 +54,37 @@ default:
 
 help:
     @just --list
+
+# Refresh derived assets. Safe to re-run after clone or when assets/appicon.png changes.
+init:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "${SCHEMA:-}" ] || [ ! -f "${SCHEMA}" ]; then
+        export SCHEMA="demo/schema.toml"
+    fi
+    just icons
+    just appicon-ico
+    just _init-hints
+    echo ">>> init complete"
+
+_init-hints:
+    #!/usr/bin/env bash
+    case "$(uname -s)" in
+        Darwin)
+            for t in {{rust_target_arm64}} {{rust_target_x86}} {{win_target}}; do
+                rustup target list --installed 2>/dev/null | grep -qx "${t}" || \
+                    echo "Note: rustup target add ${t}"
+            done
+            ;;
+        Linux)
+            command -v nfpm >/dev/null 2>&1 || \
+                echo "Note: install nfpm  (for .deb packaging)"
+            ;;
+        MINGW*|MSYS*)
+            ;;
+    esac
+    command -v magick >/dev/null 2>&1 || \
+        echo "Note: install ImageMagick  (for appicon.ico)"
 
 # ---------------------------------------------------------------------------
 # Embed (parent-app bundling)

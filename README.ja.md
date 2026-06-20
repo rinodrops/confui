@@ -54,6 +54,7 @@ max    = 65535
 
 ```bash
 cd settings
+just init                               # 初回 clone 後・アイコン変更時（下記参照）
 SETTINGS_SCHEMA=/path/to/your/schema.toml just binary
 ```
 
@@ -109,14 +110,31 @@ members = ["myapp", "settings"]
 | `SETTINGS_SCHEMA=/path just binary` | 指定パス（優先） |
 | `SETTINGS_SCHEMA` なしの `cargo build` | `demo/schema.toml` — スタンドアロン開発用フォールバック |
 
+### `just init`
+
+リポジトリを clone した直後やアイコン素材を差し替えた直後に **`just init`** を実行します。何度実行しても安全です。各ビルドレシピは `_ensure-*` で不足分を補うため，毎回 `init` は必須ではありません。生成物を明示的に更新したいとき（特にアイコン変更のコミット前）に使います。
+
+| 場所 | コマンド | 更新内容 |
+| ---- | -------- | -------- |
+| ルート | `just init` | Material アイコンフォント（`assets/icons.ttf`），`assets/appicon.png` から Windows 用 `.ico`，任意のツール案内 |
+| `demo/` | `just init` | 上記に加え，macOS では `appicon-macos.png` から `demo/assets/AppIcon.icns` を再生成 |
+
+ルートの `just init` は `SCHEMA` が設定されていればそれを使い，未設定なら `demo/schema.toml` でフォントを取得します。アイコンスタイルの上書き:
+
+```bash
+ICON_STYLE=outlined just init
+SCHEMA=/path/to/schema.toml just init
+```
+
+**macOS デモアイコン:** デモ `.app` は `demo/assets/AppIcon.icns` があればそれをコピーします。`demo/assets/appicon-macos.png` を差し替えたら macOS で `just init` → ビルド確認 → **PNG と `AppIcon.icns` をセットでコミット**してください。Linux / Windows では ICNS 生成はスキップされます（`iconutil` が macOS 専用のため）。Mac 上で生成するか，別環境で作った `.icns` をコミットしてください。
+
 ### ルート Justfile（同梱 + checker）
 
 ```bash
 cd settings
 
-# 初回 / アイコンスタイル変更時
-just icons
-ICON_STYLE=outlined just icons          # rounded / outlined / sharp
+just init                               # 初回 clone 後・アイコン / icon_style 変更時
+ICON_STYLE=outlined just init           # rounded / outlined / sharp
 
 # 親アプリ同梱用バイナリ（現在のアーキテクチャ）
 just binary
@@ -145,10 +163,12 @@ just clean
 ```bash
 cd demo
 
+just init                               # 初回 clone 後・appicon-macos.png 変更時
 just dev                                # 現在の PF 向け未署名ビルド
 just darwin-build-arm64                 # macOS .app → dist/darwin-arm64/
 just linux-release                      # zip + .deb + AppImage
 just win-zip                            # Windows .exe + config.toml
+just release                            # 署名済み macOS + 全 PF 向けリリースパッケージ
 ```
 
 ### 出力先
