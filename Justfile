@@ -12,8 +12,9 @@
 #
 # Demo builds: see demo/Justfile.
 #
-# Windows cross-compile prerequisites (macOS host):
-#   brew install mingw-w64
+# Windows cross-compile prerequisites:
+#   macOS:  brew install mingw-w64
+#   Linux:  apt install gcc-mingw-w64-x86-64   (Debian/Ubuntu)
 #   rustup target add x86_64-pc-windows-gnu
 
 set windows-shell := ["sh", "-cu"]
@@ -79,6 +80,10 @@ _init-hints:
         Linux)
             command -v nfpm >/dev/null 2>&1 || \
                 echo "Note: install nfpm  (for .deb packaging)"
+            command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 || \
+                echo "Note: apt install gcc-mingw-w64-x86-64  (for Windows cross-compile)"
+            rustup target list --installed 2>/dev/null | grep -qx "{{win_target}}" || \
+                echo "Note: rustup target add {{win_target}}"
             ;;
         MINGW*|MSYS*)
             ;;
@@ -97,6 +102,24 @@ binary: _ensure-icon-font
     echo ">>> Building release binary  (schema: ${ABS_SCHEMA})"
     SETTINGS_SCHEMA="${ABS_SCHEMA}" cargo build --release -p settings
     echo ">>> Output: target/release/{{exe_name}}"
+
+binary-arm64: _ensure-icon-font
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ABS_SCHEMA="$(just _abs-schema)"
+    echo ">>> Building embed binary  (arch: arm64, schema: ${ABS_SCHEMA})"
+    MACOSX_DEPLOYMENT_TARGET="{{min_macos}}" SETTINGS_SCHEMA="${ABS_SCHEMA}" \
+        cargo build --release -p settings --target {{rust_target_arm64}}
+    echo ">>> Output: target/{{rust_target_arm64}}/release/{{exe_name}}"
+
+binary-x86_64: _ensure-icon-font
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ABS_SCHEMA="$(just _abs-schema)"
+    echo ">>> Building embed binary  (arch: x86_64, schema: ${ABS_SCHEMA})"
+    MACOSX_DEPLOYMENT_TARGET="{{min_macos}}" SETTINGS_SCHEMA="${ABS_SCHEMA}" \
+        cargo build --release -p settings --target {{rust_target_x86}}
+    echo ">>> Output: target/{{rust_target_x86}}/release/{{exe_name}}"
 
 check-schema:
     #!/usr/bin/env bash
@@ -143,8 +166,17 @@ settings-win-build: _ensure-icon-font _ensure-appicon-ico
     echo ">>> Output: {{dist_settings}}/{{arch_win}}/{{app_name}}.exe"
 
 [linux]
-settings-win-build:
-    @echo "Error: Windows cross-compile requires a macOS host" && exit 1
+settings-win-build: _ensure-icon-font _ensure-appicon-ico
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ABS_SCHEMA="$(just _abs-schema)"
+    echo ">>> Building Settings .exe  (schema: ${ABS_SCHEMA})"
+    SETTINGS_SCHEMA="${ABS_SCHEMA}" CARGO_TARGET_DIR="{{win_target_dir}}" \
+        cargo build --release -p settings --target {{win_target}}
+    mkdir -p "{{dist_settings}}/{{arch_win}}"
+    cp "{{win_target_dir}}/{{win_target}}/release/settings.exe" \
+        "{{dist_settings}}/{{arch_win}}/{{app_name}}.exe"
+    echo ">>> Output: {{dist_settings}}/{{arch_win}}/{{app_name}}.exe"
 
 [windows]
 settings-win-build: _ensure-icon-font _ensure-appicon-ico
@@ -306,7 +338,13 @@ checker-win-build:
 
 [linux]
 checker-win-build:
-    @echo "Error: Windows cross-compile requires a macOS host" && exit 1
+    @echo ">>> Building {{checker_name}}  (arch: {{arch_win}})"
+    CARGO_TARGET_DIR="{{win_target_dir}}" \
+        cargo build --release -p settings-schema --bin {{checker_name}} --target {{win_target}}
+    mkdir -p "{{dist_checker}}/{{arch_win}}"
+    cp "{{win_target_dir}}/{{win_target}}/release/{{checker_name}}.exe" \
+        "{{dist_checker}}/{{arch_win}}/{{checker_name}}.exe"
+    @echo ">>> Output: {{dist_checker}}/{{arch_win}}/{{checker_name}}.exe"
 
 [windows]
 checker-win-build:
@@ -507,26 +545,26 @@ _darwin-write-plist contents_dir plist_bundle_id="jp.emotiongraphics.settings":
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{contents_dir}}"
-    cat > "{{contents_dir}}/Info.plist" <<'PLIST'
-    <?xml version="1.0" encoding="UTF-8"?>
-    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-    <plist version="1.0">
-    <dict>
-        <key>CFBundleName</key>              <string>Settings</string>
-        <key>CFBundleIdentifier</key>        <string>BUNDLE_ID_PLACEHOLDER</string>
-        <key>CFBundleExecutable</key>        <string>Settings</string>
-        <key>CFBundleVersion</key>           <string>VERSION_PLACEHOLDER</string>
-        <key>CFBundleShortVersionString</key><string>VERSION_PLACEHOLDER</string>
-        <key>CFBundlePackageType</key>       <string>APPL</string>
-        <key>CFBundleDevelopmentRegion</key> <string>en</string>
-        <key>LSMinimumSystemVersion</key>    <string>MIN_MACOS_PLACEHOLDER</string>
-        <key>NSHighResolutionCapable</key>   <true/>
-        <key>NSHumanReadableCopyright</key>  <string>Copyright 2026 eMotionGraphics Inc.</string>
-        <key>CFBundleIconFile</key>          <string>AppIcon</string>
-        <key>LSUIElement</key>               <false/>
-    </dict>
-    </plist>
-    PLIST
+    printf '%s\n' \\
+        '<?xml version="1.0" encoding="UTF-8"?>' \\
+        '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \\
+        '<plist version="1.0">' \\
+        '<dict>' \\
+        '    <key>CFBundleName</key>              <string>Settings</string>' \\
+        '    <key>CFBundleIdentifier</key>        <string>BUNDLE_ID_PLACEHOLDER</string>' \\
+        '    <key>CFBundleExecutable</key>        <string>Settings</string>' \\
+        '    <key>CFBundleVersion</key>           <string>VERSION_PLACEHOLDER</string>' \\
+        '    <key>CFBundleShortVersionString</key><string>VERSION_PLACEHOLDER</string>' \\
+        '    <key>CFBundlePackageType</key>       <string>APPL</string>' \\
+        '    <key>CFBundleDevelopmentRegion</key> <string>en</string>' \\
+        '    <key>LSMinimumSystemVersion</key>    <string>MIN_MACOS_PLACEHOLDER</string>' \\
+        '    <key>NSHighResolutionCapable</key>   <true/>' \\
+        '    <key>NSHumanReadableCopyright</key>  <string>Copyright 2026 eMotionGraphics Inc.</string>' \\
+        '    <key>CFBundleIconFile</key>          <string>AppIcon</string>' \\
+        '    <key>LSUIElement</key>               <false/>' \\
+        '</dict>' \\
+        '</plist>' \\
+        > "{{contents_dir}}/Info.plist"
     sed -i '' \
         -e "s/BUNDLE_ID_PLACEHOLDER/{{plist_bundle_id}}/" \
         -e "s/VERSION_PLACEHOLDER/{{version}}/" \
