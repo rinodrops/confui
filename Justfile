@@ -12,8 +12,9 @@
 #
 # Demo builds: see demo/Justfile.
 #
-# Windows cross-compile prerequisites (macOS host):
-#   brew install mingw-w64
+# Windows cross-compile prerequisites:
+#   macOS:  brew install mingw-w64
+#   Linux:  apt install gcc-mingw-w64-x86-64   (Debian/Ubuntu)
 #   rustup target add x86_64-pc-windows-gnu
 
 set windows-shell := ["sh", "-cu"]
@@ -79,6 +80,10 @@ _init-hints:
         Linux)
             command -v nfpm >/dev/null 2>&1 || \
                 echo "Note: install nfpm  (for .deb packaging)"
+            command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 || \
+                echo "Note: apt install gcc-mingw-w64-x86-64  (for Windows cross-compile)"
+            rustup target list --installed 2>/dev/null | grep -qx "{{win_target}}" || \
+                echo "Note: rustup target add {{win_target}}"
             ;;
         MINGW*|MSYS*)
             ;;
@@ -333,7 +338,13 @@ checker-win-build:
 
 [linux]
 checker-win-build:
-    @echo "Error: Windows cross-compile requires a macOS host" && exit 1
+    @echo ">>> Building {{checker_name}}  (arch: {{arch_win}})"
+    CARGO_TARGET_DIR="{{win_target_dir}}" \
+        cargo build --release -p settings-schema --bin {{checker_name}} --target {{win_target}}
+    mkdir -p "{{dist_checker}}/{{arch_win}}"
+    cp "{{win_target_dir}}/{{win_target}}/release/{{checker_name}}.exe" \
+        "{{dist_checker}}/{{arch_win}}/{{checker_name}}.exe"
+    @echo ">>> Output: {{dist_checker}}/{{arch_win}}/{{checker_name}}.exe"
 
 [windows]
 checker-win-build:

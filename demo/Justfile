@@ -9,8 +9,11 @@
 #
 # Prerequisites:
 #   macOS:  rustup target add aarch64-apple-darwin x86_64-apple-darwin
-#   Windows cross (macOS host): brew install mingw-w64; rustup target add x86_64-pc-windows-gnu
-#   ICO:    brew install imagemagick
+#   Windows cross:
+#     macOS:  brew install mingw-w64
+#     Linux:  apt install gcc-mingw-w64-x86-64   (Debian/Ubuntu)
+#     rustup target add x86_64-pc-windows-gnu
+#   ICO:    ImageMagick  (macOS: brew install imagemagick)
 #   DMG:    pipx install dmgbuild
 
 set windows-shell := ["sh", "-cu"]
@@ -96,6 +99,10 @@ _init-hints:
         Linux)
             command -v nfpm >/dev/null 2>&1 || \
                 echo "Note: install nfpm  (for .deb packaging)"
+            command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 || \
+                echo "Note: apt install gcc-mingw-w64-x86-64  (for Windows cross-compile)"
+            rustup target list --installed 2>/dev/null | grep -qx "{{win_target}}" || \
+                echo "Note: rustup target add {{win_target}}"
             ;;
         MINGW*|MSYS*)
             ;;
@@ -172,8 +179,18 @@ win-build: _ensure-icons _ensure-appicon-ico
     echo ">>> Output: {{dist}}/{{arch_win}}/{{app_name}}.exe"
 
 [linux]
-win-build:
-    @echo "Error: Windows cross-compile requires a macOS host" && exit 1
+win-build: _ensure-icons _ensure-appicon-ico
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SCHEMA="{{justfile_directory()}}/{{schema_path}}"
+    echo ">>> Building demo Windows .exe  (schema: ${SCHEMA})"
+    SETTINGS_SCHEMA="${SCHEMA}" CARGO_TARGET_DIR="{{win_target_dir}}" \
+        cargo build --manifest-path ../Cargo.toml --release -p settings --target {{win_target}}
+    mkdir -p "{{dist}}/{{arch_win}}"
+    cp "{{win_target_dir}}/{{win_target}}/release/settings.exe" \
+        "{{dist}}/{{arch_win}}/{{app_name}}.exe"
+    cp "{{config_path}}" "{{dist}}/{{arch_win}}/config.toml"
+    echo ">>> Output: {{dist}}/{{arch_win}}/{{app_name}}.exe"
 
 [windows]
 win-build: _ensure-icons _ensure-appicon-ico
