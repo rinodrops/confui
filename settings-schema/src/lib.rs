@@ -105,6 +105,67 @@ pub enum SaveButtonMode {
 }
 
 // ---------------------------------------------------------------------------
+// Migration
+
+/// A single config schema migration step (`[[migration]]` in TOML).
+///
+/// Applied when the config file's recorded version is below `version` and
+/// `version` is at most [`Schema::schema_version`]. Every operation is
+/// idempotent: a missing source key is a no-op, and destination collisions are
+/// skipped, so re-running a migration never loses data.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct Migration {
+    /// Version this step brings the config file up to. Must be unique across
+    /// migrations and not exceed [`Schema::schema_version`].
+    pub version: u32,
+    /// Move a value from one dotted path to another (same or different table).
+    #[serde(default)]
+    pub rename: Vec<Rename>,
+    /// Remove a key entirely.
+    #[serde(default)]
+    pub delete: Vec<Delete>,
+    /// Move a value while converting it (see [`TransformKind`]).
+    #[serde(default)]
+    pub transform: Vec<Transform>,
+}
+
+/// Move a value between dotted paths without changing it.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct Rename {
+    pub from: String,
+    pub to: String,
+}
+
+/// Remove a key by dotted path.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct Delete {
+    pub key: String,
+}
+
+/// Move a value from `from` to `to`, converting it per `kind`.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct Transform {
+    pub from: String,
+    pub to: String,
+    #[serde(rename = "type")]
+    pub kind: TransformKind,
+    /// Source string that maps to `true` for [`TransformKind::EnumToBool`].
+    /// Required for `enum_to_bool`; ignored otherwise.
+    #[serde(default, rename = "match")]
+    pub match_value: Option<String>,
+}
+
+/// Value conversion applied by a [`Transform`].
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TransformKind {
+    /// Move the value unchanged (equivalent to [`Rename`]).
+    Rename,
+    /// Write `true` when the source string equals `match`, else `false`.
+    EnumToBool,
+}
+
+// ---------------------------------------------------------------------------
 // Validation (CEL)
 
 /// A named CEL constraint (`[[constraints]]` in the schema).
@@ -178,6 +239,10 @@ pub enum SchemaValidationError {
         expr: String,
         detail: String,
     },
+    DuplicateMigrationVersion { version: u32 },
+    MigrationVersionExceedsTarget { version: u32, target: u32 },
+    MigrationsWithoutSchemaVersion,
+    TransformMissingMatch { location: String },
 }
 
 impl SchemaValidationError {
@@ -211,6 +276,18 @@ impl SchemaValidationError {
             Self::InvalidCelExpression { detail, .. } => {
                 format!("invalid CEL expression: {detail}")
             }
+            Self::DuplicateMigrationVersion { version } => {
+                format!("duplicate migration version {version}")
+            }
+            Self::MigrationVersionExceedsTarget { version, target } => format!(
+                "migration version {version} exceeds schema_version {target}"
+            ),
+            Self::MigrationsWithoutSchemaVersion => {
+                "[[migration]] entries require a top-level schema_version".to_owned()
+            }
+            Self::TransformMissingMatch { .. } => {
+                "transform type \"enum_to_bool\" requires a `match` value".to_owned()
+            }
         }
     }
 
@@ -218,6 +295,9 @@ impl SchemaValidationError {
     pub fn context(&self) -> Option<&str> {
         match self {
             Self::DuplicateConstraintId { .. } => Some("[[constraints]]"),
+            Self::DuplicateMigrationVersion { .. }
+            | Self::MigrationVersionExceedsTarget { .. }
+            | Self::MigrationsWithoutSchemaVersion => Some("[[migration]]"),
             Self::UnknownConstraintRef { location, .. }
             | Self::MissingConstraintMessage { location, .. }
             | Self::OptionStatesUnsupportedWidget { location, .. }
@@ -225,7 +305,8 @@ impl SchemaValidationError {
             | Self::OptionStateMissingRule { location, .. }
             | Self::DuplicateOptionStateValue { location, .. }
             | Self::UnknownOptionValue { location, .. }
-            | Self::InvalidCelExpression { location, .. } => Some(location),
+            | Self::InvalidCelExpression { location, .. }
+            | Self::TransformMissingMatch { location } => Some(location),
         }
     }
 
@@ -258,6 +339,18 @@ impl SchemaValidationError {
             }
             Self::InvalidCelExpression { .. } => {
                 "fix the CEL syntax or use a supported function"
+            }
+            Self::DuplicateMigrationVersion { .. } => {
+                "use a unique `version` for each [[migration]] entry"
+            }
+            Self::MigrationVersionExceedsTarget { .. } => {
+                "raise the top-level schema_version or lower the migration version"
+            }
+            Self::MigrationsWithoutSchemaVersion => {
+                "add a top-level `schema_version` equal to the highest migration version"
+            }
+            Self::TransformMissingMatch { .. } => {
+                "add `match = \"...\"` or change the transform type"
             }
         }
     }
@@ -351,6 +444,28 @@ pub struct Schema {
     /// and bottom button bar). Defaults to 370 when omitted.
     #[serde(default)]
     pub content_height: Option<f32>,
+    /// Target config schema version. When set, Settings migrates the config file
+    /// up to this version at startup (see [`Migration`]). Omit to disable migration.
+    #[serde(default)]
+    pub schema_version: Option<u32>,
+    /// Config key that records the applied migration version. Defaults to
+    /// `"schema_version"`. Override when the parent app already uses that key.
+    #[serde(default)]
+    pub migration_version_key: Option<String>,
+    /// Ordered migration steps (`[[migration]]` in TOML). Applied in ascending
+    /// `version` order for versions above the config file's recorded version.
+    #[serde(default, rename = "migration")]
+    pub migrations: Vec<Migration>,
+}
+
+impl Schema {
+    /// Config key used to record the applied migration version.
+    /// Falls back to `"schema_version"` when the schema does not override it.
+    pub fn version_key(&self) -> &str {
+        self.migration_version_key
+            .as_deref()
+            .unwrap_or("schema_version")
+    }
 }
 
 impl Schema {
@@ -409,11 +524,50 @@ impl Schema {
         }
 
         validate_cel_expressions(self, &mut errors);
+        validate_migrations(self, &mut errors);
 
         if errors.is_empty() {
             Ok(())
         } else {
             Err(errors)
+        }
+    }
+}
+
+fn validate_migrations(schema: &Schema, errors: &mut Vec<SchemaValidationError>) {
+    if schema.migrations.is_empty() {
+        return;
+    }
+
+    let Some(target) = schema.schema_version else {
+        errors.push(SchemaValidationError::MigrationsWithoutSchemaVersion);
+        // Without a target there is nothing to bound versions against; still
+        // report per-entry issues below.
+        return;
+    };
+
+    let mut seen = BTreeMap::<u32, ()>::new();
+    for migration in &schema.migrations {
+        if seen.insert(migration.version, ()).is_some() {
+            errors.push(SchemaValidationError::DuplicateMigrationVersion {
+                version: migration.version,
+            });
+        }
+        if migration.version > target {
+            errors.push(SchemaValidationError::MigrationVersionExceedsTarget {
+                version: migration.version,
+                target,
+            });
+        }
+        for transform in &migration.transform {
+            if transform.kind == TransformKind::EnumToBool && transform.match_value.is_none() {
+                errors.push(SchemaValidationError::TransformMissingMatch {
+                    location: format!(
+                        "migration version={} transform from={:?} to={:?}",
+                        migration.version, transform.from, transform.to
+                    ),
+                });
+            }
         }
     }
 }
@@ -1392,6 +1546,161 @@ validate = "c"
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../demo/schema.toml");
         check_schema_file(&path).expect("demo schema should be valid");
+    }
+
+    #[test]
+    fn parse_migration_block() {
+        let src = r#"
+schema_version = 2
+
+[[migration]]
+version = 2
+
+  [[migration.rename]]
+  from = "display.font_size"
+  to   = "general.font_size"
+
+  [[migration.delete]]
+  key = "display.tick_rate"
+
+  [[migration.transform]]
+  from  = "mode"
+  to    = "vivarium.enabled"
+  type  = "enum_to_bool"
+  match = "vivarium"
+
+[[tabs]]
+id = "main"
+label = "Main"
+"#;
+        let schema = parse_and_validate(src).unwrap();
+        assert_eq!(schema.schema_version, Some(2));
+        assert_eq!(schema.version_key(), "schema_version");
+        assert_eq!(schema.migrations.len(), 1);
+        let m = &schema.migrations[0];
+        assert_eq!(m.rename.len(), 1);
+        assert_eq!(m.delete.len(), 1);
+        assert_eq!(m.transform.len(), 1);
+        assert_eq!(m.transform[0].kind, TransformKind::EnumToBool);
+        assert_eq!(m.transform[0].match_value.as_deref(), Some("vivarium"));
+    }
+
+    #[test]
+    fn migration_version_key_override() {
+        let src = r#"
+schema_version = 1
+migration_version_key = "config_schema_version"
+
+[[migration]]
+version = 1
+
+[[tabs]]
+id = "main"
+label = "Main"
+"#;
+        let schema = parse_and_validate(src).unwrap();
+        assert_eq!(schema.version_key(), "config_schema_version");
+    }
+
+    #[test]
+    fn error_duplicate_migration_version() {
+        let src = r#"
+schema_version = 2
+
+[[migration]]
+version = 2
+
+[[migration]]
+version = 2
+
+[[tabs]]
+id = "main"
+label = "Main"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            SchemaValidationError::DuplicateMigrationVersion { version } if *version == 2
+        )));
+    }
+
+    #[test]
+    fn error_migration_version_exceeds_target() {
+        let src = r#"
+schema_version = 1
+
+[[migration]]
+version = 2
+
+[[tabs]]
+id = "main"
+label = "Main"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            SchemaValidationError::MigrationVersionExceedsTarget { version, target }
+                if *version == 2 && *target == 1
+        )));
+    }
+
+    #[test]
+    fn error_migrations_without_schema_version() {
+        let src = r#"
+[[migration]]
+version = 1
+
+[[tabs]]
+id = "main"
+label = "Main"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, SchemaValidationError::MigrationsWithoutSchemaVersion)));
+    }
+
+    #[test]
+    fn error_transform_missing_match() {
+        let src = r#"
+schema_version = 1
+
+[[migration]]
+version = 1
+
+  [[migration.transform]]
+  from = "mode"
+  to   = "vivarium.enabled"
+  type = "enum_to_bool"
+
+[[tabs]]
+id = "main"
+label = "Main"
+"#;
+        let errs = parse(src).unwrap().validate().unwrap_err();
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, SchemaValidationError::TransformMissingMatch { .. })));
+    }
+
+    #[test]
+    fn transform_rename_kind_allows_missing_match() {
+        let src = r#"
+schema_version = 1
+
+[[migration]]
+version = 1
+
+  [[migration.transform]]
+  from = "old.key"
+  to   = "new.key"
+  type = "rename"
+
+[[tabs]]
+id = "main"
+label = "Main"
+"#;
+        parse_and_validate(src).unwrap();
     }
 
     #[test]

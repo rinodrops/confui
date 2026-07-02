@@ -19,6 +19,7 @@ Ships as a separate binary — it reads and writes TOML only, so its lifecycle i
 - **16 built-in languages** — Arabic, Mandarin, German, English, French, Hindi, Italian, Japanese, Korean, Dutch, Portuguese, Russian, Spanish, Swedish, Turkish, Vietnamese
 - **Light / Dark** — OS-adaptive or forced; fully customizable color palette
 - **External change detection** — watches the config file and prompts on conflict
+- **Config migration** — declare key renames/moves/removals in the schema; old config files migrate automatically on launch
 - **Cross-platform** — macOS, Windows, Linux
 
 ## Quick Start
@@ -211,6 +212,45 @@ Full schema reference, widget guide, theming, and localization:
 are numeric strings used as segment labels and stored values. When every option
 omits `.`, whole numbers are written as integer literals (e.g. `count = 3`); if any
 option contains `.`, floats are used (e.g. `weight = 2.0`).
+
+## Config migration
+
+When a parent app renames, moves, or removes config keys, existing user config
+files would otherwise keep the stale layout. Declare the changes in the schema and
+Settings migrates the config file on launch, preserving comments and formatting.
+
+```toml
+schema_version = 2                        # target version
+# migration_version_key = "schema_version"  # optional: config key that records progress
+
+[[migration]]
+version = 2
+  [[migration.rename]]                    # move a value (same or different table)
+  from = "display.font_size"
+  to   = "general.font_size"
+
+  [[migration.delete]]                    # remove a key
+  key = "display.tick_rate"
+
+  [[migration.transform]]                 # move + convert
+  from  = "mode"
+  to    = "vivarium.enabled"
+  type  = "enum_to_bool"                  # true when `from` equals `match`, else false
+  match = "vivarium"
+```
+
+Behavior:
+
+- On launch, Settings compares the config file's recorded version (top-level
+  `schema_version`, or the key named by `migration_version_key`) against the
+  schema's `schema_version`, applies pending `[[migration]]` blocks in ascending
+  `version` order, records the new version, and saves.
+- A missing recorded version is treated as `0`, so every migration applies.
+- Operations are idempotent: a missing source key is a no-op, and a move whose
+  destination already exists is skipped (existing values are preserved).
+- Emptied parent tables (e.g. `[display]`) are pruned.
+- `settings-schema-checker` validates the migration block (duplicate versions,
+  versions exceeding `schema_version`, and `enum_to_bool` without `match`).
 
 ## License
 
