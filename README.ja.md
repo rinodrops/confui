@@ -19,6 +19,7 @@ TOML 形式の設定ファイルを持つアプリケーション向けの，独
 - **16 言語組み込み** — アラビア語・中国語（普通話）・ドイツ語・英語・フランス語・ヒンディー語・イタリア語・日本語・韓国語・オランダ語・ポルトガル語・ロシア語・スペイン語・スウェーデン語・トルコ語・ベトナム語
 - **Light / Dark テーマ** — OS 追従または固定。カラーパレットを完全カスタマイズ可能
 - **外部変更検知** — 設定ファイルを監視し，競合時にダイアログを表示
+- **設定マイグレーション** — キーのリネーム・移動・削除をスキーマに宣言すれば，起動時に旧い設定ファイルを自動移行
 - **クロスプラットフォーム** — macOS・Windows・Linux
 
 ## クイックスタート
@@ -203,6 +204,44 @@ ARCH slug: `darwin-arm64`, `darwin-x86_64`, `windows-x86_64`, `linux-x86_64`。
 保存値となる数値の文字列表現です。すべての option に `.` が含まれない場合は整数リテラル
 （例: `count = 3`）、いずれかに `.` がある場合は浮動小数点リテラル（例: `weight = 2.0`）
 として書き込みます。
+
+## 設定マイグレーション
+
+親アプリが設定キーをリネーム・移動・削除すると，既存のユーザー設定ファイルは旧レイアウトの
+まま取り残されます。変更をスキーマに宣言しておくと，Settings が起動時に設定ファイルを移行
+します（コメントとフォーマットは保持）。
+
+```toml
+schema_version = 2                        # 目標バージョン
+# migration_version_key = "schema_version"  # 任意: 進捗を記録する設定キー名
+
+[[migration]]
+version = 2
+  [[migration.rename]]                    # 値の移動（同一・別テーブル）
+  from = "display.font_size"
+  to   = "general.font_size"
+
+  [[migration.delete]]                    # キー削除
+  key = "display.tick_rate"
+
+  [[migration.transform]]                 # 移動 + 変換
+  from  = "mode"
+  to    = "vivarium.enabled"
+  type  = "enum_to_bool"                  # from が match と一致すれば true，それ以外は false
+  match = "vivarium"
+```
+
+挙動:
+
+- 起動時に，設定ファイルに記録されたバージョン（トップレベル `schema_version`，または
+  `migration_version_key` で指定したキー）とスキーマの `schema_version` を比較し，未適用の
+  `[[migration]]` を `version` 昇順で適用し，新しいバージョンを記録して保存します。
+- 記録バージョンが無い場合は `0` とみなし，すべてのマイグレーションを適用します。
+- 各操作は冪等です。移行元キーが無ければ何もせず，移行先が既に存在する移動はスキップします
+  （既存の値を保持）。
+- 空になった親テーブル（例: `[display]`）は除去します。
+- `settings-schema-checker` がマイグレーションブロックを検証します（バージョン重複，
+  `schema_version` を超えるバージョン，`match` の無い `enum_to_bool` 等）。
 
 ## ライセンス
 
