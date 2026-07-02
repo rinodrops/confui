@@ -272,6 +272,117 @@ impl ConfigStore {
         }
         removed
     }
+
+    // -----------------------------------------------------------------------
+    // Migration support (low-level moves + version tracking)
+
+    /// Returns `true` if a value or table exists at `path`.
+    pub fn contains(&self, path: &str) -> bool {
+        self.get_item(path).is_some()
+    }
+
+    /// Read the migration version recorded at `key`. Returns `None` when the key
+    /// is absent or is not a non-negative integer.
+    pub fn get_version(&self, key: &str) -> Option<u32> {
+        self.get_item(key)?
+            .as_integer()
+            .and_then(|i| u32::try_from(i).ok())
+    }
+
+    /// Record the migration version at `key`, written as a TOML integer.
+    pub fn set_version(&mut self, key: &str, version: u32) -> bool {
+        self.set_item(key, toml_edit::value(i64::from(version)))
+    }
+
+    /// Remove the item at `path` and return it, if present. Does not create
+    /// intermediate tables.
+    fn take_item(&mut self, path: &str) -> Option<Item> {
+        let parts: Vec<&str> = path.split('.').collect();
+        let (last, parents) = parts.split_last()?;
+        let root = self.doc.as_table_mut();
+        let parent = Self::descend(root, parents)?;
+        let removed = parent.remove(last);
+        if removed.is_some() {
+            self.dirty = true;
+        }
+        removed
+    }
+
+    /// Remove now-empty ancestor tables of `path`, bottom-up, stopping at the
+    /// first non-empty ancestor and never touching the document root. Explicit
+    /// tables (e.g. `[display]`) otherwise linger after their keys are migrated
+    /// away, so this keeps the file tidy.
+    fn prune_empty_parents(&mut self, path: &str) {
+        let parts: Vec<&str> = path.split('.').collect();
+        for depth in (1..parts.len()).rev() {
+            let parent_path = &parts[..depth];
+            let root = self.doc.as_table_mut();
+            let Some(table) = Self::descend(root, parent_path) else {
+                break;
+            };
+            if !table.is_empty() {
+                break;
+            }
+            let (last, grand) = parent_path.split_last().unwrap();
+            let root = self.doc.as_table_mut();
+            if let Some(gp) = Self::descend(root, grand)
+                && gp.remove(last).is_some()
+            {
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// Move the value at `from` to `to`, preserving the value. No-op (returns
+    /// `false`) when `from` is absent, `to` already exists, or the destination
+    /// path passes through a non-table. Ancestor tables emptied by the move are
+    /// pruned.
+    pub fn rename_key(&mut self, from: &str, to: &str) -> bool {
+        if from == to || self.contains(to) {
+            return false;
+        }
+        let Some(item) = self.take_item(from) else {
+            return false;
+        };
+        if !self.set_item(to, item.clone()) {
+            // Destination unusable — reinsert so the value is never lost.
+            self.set_item(from, item);
+            return false;
+        }
+        self.prune_empty_parents(from);
+        true
+    }
+
+    /// Remove the key at `path` and prune any ancestor tables it emptied.
+    pub fn delete_key(&mut self, path: &str) -> bool {
+        let removed = self.remove(path);
+        if removed {
+            self.prune_empty_parents(path);
+        }
+        removed
+    }
+
+    /// Convert an enum-like string to a bool: writes `true` at `to` when the
+    /// value at `from` equals `match_value`, otherwise `false`, then removes
+    /// `from`. No-op (returns `false`) when `from` is absent or `to` exists.
+    pub fn transform_enum_to_bool(
+        &mut self,
+        from: &str,
+        to: &str,
+        match_value: Option<&str>,
+    ) -> bool {
+        if self.contains(to) {
+            return false;
+        }
+        let Some(current) = self.get_str(from).map(str::to_owned) else {
+            return false;
+        };
+        let value = match_value == Some(current.as_str());
+        self.set_bool(to, value);
+        self.remove(from);
+        self.prune_empty_parents(from);
+        true
+    }
 }
 
 #[cfg(test)]
@@ -294,6 +405,93 @@ mod tests {
             NumberRepr::from_options(&["0.5".into(), "1.0".into()]),
             NumberRepr::AlwaysFloat
         );
+    }
+
+    fn store_from(name: &str, src: &str) -> (ConfigStore, std::path::PathBuf) {
+        let path = std::env::temp_dir().join(format!(
+            "settings_migrate_{}_{}.toml",
+            name,
+            std::process::id()
+        ));
+        std::fs::write(&path, src).unwrap();
+        (ConfigStore::load(&path).unwrap(), path)
+    }
+
+    #[test]
+    fn rename_key_moves_value_and_prunes_empty_parent() {
+        let (mut store, path) = store_from(
+            "rename",
+            "[display]\nfont_size = 14\n",
+        );
+        assert!(store.rename_key("display.font_size", "general.font_size"));
+        assert_eq!(store.get_number("general.font_size"), Some(14.0));
+        assert!(!store.contains("display.font_size"));
+        // The now-empty [display] table is pruned.
+        assert!(!store.contains("display"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rename_key_skips_when_destination_exists() {
+        let (mut store, path) = store_from(
+            "rename_skip",
+            "[display]\nfont_size = 14\n\n[general]\nfont_size = 20\n",
+        );
+        assert!(!store.rename_key("display.font_size", "general.font_size"));
+        // Existing destination is preserved; source is left intact.
+        assert_eq!(store.get_number("general.font_size"), Some(20.0));
+        assert_eq!(store.get_number("display.font_size"), Some(14.0));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rename_key_noop_when_source_absent() {
+        let (mut store, path) = store_from("rename_absent", "[general]\nx = 1\n");
+        assert!(!store.rename_key("display.font_size", "general.font_size"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn delete_key_removes_and_prunes() {
+        let (mut store, path) = store_from("delete", "[display]\ntick_rate = 60\n");
+        assert!(store.delete_key("display.tick_rate"));
+        assert!(!store.contains("display.tick_rate"));
+        assert!(!store.contains("display"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn transform_enum_to_bool_matches_true() {
+        let (mut store, path) = store_from("enum_true", "mode = \"vivarium\"\n");
+        assert!(store.transform_enum_to_bool("mode", "vivarium.enabled", Some("vivarium")));
+        assert_eq!(store.get_bool("vivarium.enabled"), Some(true));
+        assert!(!store.contains("mode"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn transform_enum_to_bool_non_match_false() {
+        let (mut store, path) = store_from("enum_false", "mode = \"free\"\n");
+        assert!(store.transform_enum_to_bool("mode", "vivarium.enabled", Some("vivarium")));
+        assert_eq!(store.get_bool("vivarium.enabled"), Some(false));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn version_get_set_roundtrip() {
+        let (mut store, path) = store_from("version", "[general]\nfont_size = 14\n");
+        assert_eq!(store.get_version("schema_version"), None);
+        assert!(store.set_version("schema_version", 3));
+        assert_eq!(store.get_version("schema_version"), Some(3));
+        store.save().unwrap();
+
+        // Reload: the top-level key must round-trip at the document root, not
+        // inside the [general] table.
+        let reloaded = ConfigStore::load(&path).unwrap();
+        assert_eq!(reloaded.get_version("schema_version"), Some(3));
+        assert_eq!(reloaded.get_number("general.font_size"), Some(14.0));
+        assert_eq!(reloaded.get_version("general.schema_version"), None);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

@@ -3,6 +3,7 @@
 mod app;
 mod config;
 mod i18n;
+mod migrate;
 mod schema;
 mod single_instance;
 mod theme;
@@ -49,8 +50,15 @@ fn main() {
     }
 
     let schema = schema::load().expect("Failed to parse schema.toml");
-    let config = config::ConfigStore::load(&config_path)
+    let mut config = config::ConfigStore::load(&config_path)
         .unwrap_or_else(|e| panic!("Failed to load config {config_path:?}: {e}"));
+
+    // Migrate the config to the schema's target version before the window and
+    // file watcher start. Runs before single-instance-owned edits so the file
+    // is written once, up front.
+    if let Err(e) = migrate::run(&schema, &mut config) {
+        eprintln!("warning: config migration failed: {e}");
+    }
 
     // Resolve the UI language once at startup; it does not change at runtime.
     // When `lang = "os"`, prefer the parent application's own language setting
